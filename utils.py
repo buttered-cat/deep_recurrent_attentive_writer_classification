@@ -22,6 +22,7 @@ def center_crop(x, crop_h, crop_w=None, resize_w=64):
     h, w = x.shape[:2]
     j = int(round((h - crop_h)/2.))
     i = int(round((w - crop_w)/2.))
+    # take center
     return scipy.misc.imresize(x[j:j+crop_h, i:i+crop_w],
                                [resize_w, resize_w])
 

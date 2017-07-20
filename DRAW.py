@@ -5,6 +5,9 @@ from utils import *
 from glob import glob
 import os
 
+
+# TODO: validation + early stopping. Maybe hold-out + cross validation?
+
 class Draw():
     def __init__(self):
 
@@ -12,7 +15,7 @@ class Draw():
         self.num_colors = 3
 
         self.attention_n = 5
-        self.n_hidden = 256
+        self.n_hidden = 256     # img_size_x * img_size_y
         self.n_z = 10
         self.sequence_length = 10
         self.batch_size = 64
@@ -22,6 +25,7 @@ class Draw():
 
         self.e = tf.random_normal((self.batch_size, self.n_z), mean=0, stddev=1) # Qsampler noise
 
+        # What kinda structure? A cell IS A CELL, with vectors as input/output
         self.lstm_enc = tf.nn.rnn_cell.LSTMCell(self.n_hidden, state_is_tuple=True) # encoder Op
         self.lstm_dec = tf.nn.rnn_cell.LSTMCell(self.n_hidden, state_is_tuple=True) # decoder Op
 
@@ -55,7 +59,8 @@ class Draw():
 
         # the final timestep
         self.generated_images = tf.nn.sigmoid(self.cs[-1])
-        # log likelihood
+
+        # log likelihood of binary image
         # self.generation_loss = tf.reduce_mean(-tf.reduce_sum(self.images * tf.log(1e-10 + self.generated_images) + (1-self.images) * tf.log(1e-10 + 1 - self.generated_images), 1))
         self.generation_loss = tf.nn.l2_loss(x - self.generated_images)
         # TODO: better measure
@@ -80,6 +85,7 @@ class Draw():
 
     # given a hidden decoder layer:
     # locate where to put attention filters
+    # TODO: maybe variable window aspect ratio?
     def attn_window(self, scope, h_dec):
         with tf.variable_scope(scope, reuse=self.share_parameters):
             parameters = dense(h_dec, self.n_hidden, 5)
@@ -220,6 +226,7 @@ class Draw():
         saver = tf.train.Saver(max_to_keep=2)
 
         for e in range(10):
+            # epoch
             for i in range((len(data) / self.batch_size) - 2):
 
                 batch_files = data[i*self.batch_size:(i+1)*self.batch_size]
