@@ -6,7 +6,7 @@ from glob import glob
 import os
 
 
-# TODO: validation + early stopping. Maybe hold-out + cross validation?
+# TODO: validation + early stopping. Maybe hold-out + cross validation the rest?
 
 class Draw():
     def __init__(self):
@@ -117,7 +117,7 @@ class Draw():
         mu_x = tf.reshape(mu_x, [-1, self.attention_n, 1])
         mu_y = tf.reshape(mu_y, [-1, self.attention_n, 1])
         # 1 x 1 x imgsize, looks like [[[0,1,2,3,4,...,27]]]
-        im = tf.reshape(tf.cast(tf.range(self.img_size), tf.float32), [1, 1, -1])
+        im = tf.reshape(tf.cast(tf.range(self.img_size), tf.float32), [1, 1, -1])     # TODO: image size as param
         # list of gaussian curves for x and y
         sigma2 = tf.reshape(sigma2, [-1, 1, 1])
         Fx = tf.exp(-tf.square((im - mu_x) / (2*sigma2)))
