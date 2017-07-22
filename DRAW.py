@@ -21,8 +21,11 @@ class Draw():
         self.batch_size = 64
         self.share_parameters = False
 
-        # TODO: variable image size
-        self.images = tf.placeholder(tf.float32, [None, self.img_size, self.img_size, self.num_colors])
+        # TODO: variable image size: maybe classify by size and do batch matrix multiplication
+        # checkout https://stackoverflow.com/questions/38966533/different-image-sizes-in-tensorflow-with-batch-size-1
+        # and https://gist.github.com/eerwitt/518b0c9564e500b4b50f
+        # self.images = tf.placeholder(tf.float32, [None, self.img_size, self.img_size, self.num_colors])
+        self.images = None
 
         self.e = tf.random_normal((self.batch_size, self.n_z), mean=0, stddev=1) # Qsampler noise
 
@@ -218,8 +221,8 @@ class Draw():
 
 
     def train(self):
-        data = glob(os.path.join("../Datasets/celebA", "*.jpg"))
-        base = np.array([get_image(sample_file, 108, is_crop=True) for sample_file in data[0:64]])
+        data = glob(os.path.join("./data/train", "*.jpg"))
+        base = np.array([get_image(sample_file) for sample_file in data[0:64]])     # TODO: what does base do?
         base += 1
         base /= 2
 
@@ -232,12 +235,13 @@ class Draw():
             for i in range((len(data) / self.batch_size) - 2):
 
                 batch_files = data[i*self.batch_size:(i+1)*self.batch_size]
-                batch = [get_image(batch_file, 108, is_crop=True) for batch_file in batch_files]
+                batch = [get_image(batch_file) for batch_file in batch_files]   # [batch, height, width, channels]
                 batch_images = np.array(batch).astype(np.float32)
                 batch_images += 1
                 batch_images /= 2
+                self.images = batch_images      # no need to feed anymore
 
-                cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([self.cs, self.attn_params, self.generation_loss, self.latent_loss, self.train_op], feed_dict={self.images: batch_images})
+                cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([self.cs, self.attn_params, self.generation_loss, self.latent_loss, self.train_op])
                 print("epoch %d iter %d genloss %f latloss %f" % (e, i, gen_loss, lat_loss))
                 # print(attn_params[0].shape)
                 # print(attn_params[1].shape)
@@ -256,17 +260,18 @@ class Draw():
 
 
     def view(self):
-        data = glob(os.path.join("../Datasets/celebA", "*.jpg"))
-        base = np.array([get_image(sample_file, 108, is_crop=True) for sample_file in data[0:64]])
+        data = glob(os.path.join("./data/train", "*.jpg"))          # TODO: what is that?
+        base = np.array([get_image(sample_file) for sample_file in data[0:64]])
         base += 1
         base /= 2
+        self.images = base
 
         ims("results/base.jpg",merge_color(base,[8,8]))
 
         saver = tf.train.Saver(max_to_keep=2)
         saver.restore(self.sess, tf.train.latest_checkpoint(os.getcwd()+"/training/"))
 
-        cs, attn_params, gen_loss, lat_loss = self.sess.run([self.cs, self.attn_params, self.generation_loss, self.latent_loss], feed_dict={self.images: base})
+        cs, attn_params, gen_loss, lat_loss = self.sess.run([self.cs, self.attn_params, self.generation_loss, self.latent_loss])
         print("genloss %f latloss %f" % (gen_loss, lat_loss))
 
         cs = 1.0/(1.0+np.exp(-np.array(cs))) # x_recons=sigmoid(canvas)

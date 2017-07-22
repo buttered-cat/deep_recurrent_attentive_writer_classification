@@ -5,8 +5,11 @@ import tensorflow as tf
 import _pickle as cPickle
 
 
-def get_image(image_path, image_size, is_crop=True):
-    return transform(imread(image_path), image_size, is_crop)
+# check https://stackoverflow.com/questions/38966533/different-image-sizes-in-tensorflow-with-batch-size-1
+def get_image(image_path):
+    with open(image_path, mode='rb') as file:
+        return tf.image.decode_jpeg(file.read(), channels=3)
+        # [height, width, channels] tensor
 
 def transform(image, npx=64, is_crop=True):
     # npx : # of pixels width/height of image
