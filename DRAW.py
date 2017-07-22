@@ -21,6 +21,7 @@ class Draw():
         self.batch_size = 64
         self.share_parameters = False
 
+        # TODO: variable image size
         self.images = tf.placeholder(tf.float32, [None, self.img_size, self.img_size, self.num_colors])
 
         self.e = tf.random_normal((self.batch_size, self.n_z), mean=0, stddev=1) # Qsampler noise
@@ -86,7 +87,7 @@ class Draw():
     # given a hidden decoder layer:
     # locate where to put attention filters
     # TODO: maybe variable window aspect ratio?
-    def attn_window(self, scope, h_dec):
+    def attn_window(self, scope, h_dec, image_size_x, image_size_y):
         with tf.variable_scope(scope, reuse=self.share_parameters):
             parameters = dense(h_dec, self.n_hidden, 5)
         # gx_, gy_: center of 2d gaussian on a scale of -1 to 1
@@ -103,12 +104,12 @@ class Draw():
 
         self.attn_params.append([gx, gy, delta])
 
-        return self.filterbank(gx,gy,sigma2,delta) + (tf.exp(log_gamma),)
+        return self.filterbank(gx,gy,sigma2,delta, image_size_x, image_size_y) + (tf.exp(log_gamma),)
 
     # Given a center, distance, and spread
     # Construct [attention_n x attention_n] patches of gaussian filters
     # represented by Fx = horizontal gaussian, Fy = vertical guassian
-    def filterbank(self, gx, gy, sigma2, delta):
+    def filterbank(self, gx, gy, sigma2, delta, image_size_x, image_size_y):
         # 1 x N, look like [[0,1,2,3,4]]
         grid_i = tf.reshape(tf.cast(tf.range(self.attention_n), tf.float32),[1, -1])
         # centers for the individual patches
@@ -117,11 +118,12 @@ class Draw():
         mu_x = tf.reshape(mu_x, [-1, self.attention_n, 1])
         mu_y = tf.reshape(mu_y, [-1, self.attention_n, 1])
         # 1 x 1 x imgsize, looks like [[[0,1,2,3,4,...,27]]]
-        im = tf.reshape(tf.cast(tf.range(self.img_size), tf.float32), [1, 1, -1])     # TODO: image size as param
+        im_x = tf.reshape(tf.cast(tf.range(image_size_x), tf.float32), [1, 1, -1])     # TODO: image size as param
+        im_y = tf.reshape(tf.cast(tf.range(image_size_y), tf.float32), [1, 1, -1])
         # list of gaussian curves for x and y
         sigma2 = tf.reshape(sigma2, [-1, 1, 1])
-        Fx = tf.exp(-tf.square((im - mu_x) / (2*sigma2)))
-        Fy = tf.exp(-tf.square((im - mu_x) / (2*sigma2)))
+        Fx = tf.exp(-tf.square((im_x - mu_x) / (2*sigma2)))
+        Fy = tf.exp(-tf.square((im_y - mu_y) / (2*sigma2)))
         # normalize so area-under-curve = 1
         Fx = Fx / tf.maximum(tf.reduce_sum(Fx,2,keep_dims=True),1e-8)
         Fy = Fy / tf.maximum(tf.reduce_sum(Fy,2,keep_dims=True),1e-8)
@@ -133,7 +135,7 @@ class Draw():
         return tf.concat(1,[x,x_hat])
 
     def read_attention(self, x, x_hat, h_dec_prev):
-        Fx, Fy, gamma = self.attn_window("read", h_dec_prev)
+        Fx, Fy, gamma = self.attn_window("read", h_dec_prev, image_size_x, image_size_y)
         # we have the parameters for a patch of gaussian filters. apply them.
         def filter_img(img, Fx, Fy, gamma):
             # Fx,Fy = [64,5,32]
