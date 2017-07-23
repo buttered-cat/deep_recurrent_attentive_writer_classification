@@ -26,6 +26,7 @@ class Draw():
         # and https://gist.github.com/eerwitt/518b0c9564e500b4b50f
         # self.images = tf.placeholder(tf.float32, [None, self.img_size, self.img_size, self.num_colors])
         self.images = None
+        self.load_images("./data/train", "*.jpg")
 
         self.e = tf.random_normal((self.batch_size, self.n_z), mean=0, stddev=1) # Qsampler noise
 
@@ -40,26 +41,29 @@ class Draw():
         enc_state = self.lstm_enc.zero_state(self.batch_size, tf.float32)
         dec_state = self.lstm_dec.zero_state(self.batch_size, tf.float32)
 
-        x = tf.reshape(self.images, [-1, self.img_size*self.img_size*self.num_colors])
+        # x = tf.reshape(self.images, [-1, self.img_size*self.img_size*self.num_colors])
+        # x = self.images     # [batch, height, width, channel]
         self.attn_params = []
         for t in range(self.sequence_length):
-            # error image + original image
-            c_prev = tf.zeros((self.batch_size, self.img_size * self.img_size * self.num_colors)) if t == 0 else self.cs[t-1]
-            x_hat = x - tf.sigmoid(c_prev)
-            # read the image
-            # r = self.read_basic(x,x_hat,h_dec_prev)
-            r = self.read_attention(x,x_hat,h_dec_prev)
-            # encode it to gauss distrib
-            self.mu[t], self.logsigma[t], self.sigma[t], enc_state = self.encode(enc_state, tf.concat(1, [r, h_dec_prev]))
-            # sample from the distrib to get z
-            z = self.sampleQ(self.mu[t],self.sigma[t])
-            # retrieve the hidden layer of RNN
-            h_dec, dec_state = self.decode_layer(dec_state, z)
-            # map from hidden layer -> image portion, and then write it.
-            # self.cs[t] = c_prev + self.write_basic(h_dec)
-            self.cs[t] = c_prev + self.write_attention(h_dec)
-            h_dec_prev = h_dec
-            self.share_parameters = True # from now on, share variables
+            # TODO: problems with image feeding - batch
+            for x in range(len(self.images)):
+                # error image + original image
+                c_prev = tf.zeros((1, len(x) * len(x[0]) * len(x[0][0]))) if t == 0 else self.cs[t-1]
+                x_hat = x - tf.sigmoid(c_prev)
+                # read the image
+                # r = self.read_basic(x,x_hat,h_dec_prev)
+                r = self.read_attention(x,x_hat,h_dec_prev)
+                # encode it to gauss distrib
+                self.mu[t], self.logsigma[t], self.sigma[t], enc_state = self.encode(enc_state, tf.concat(1, [r, h_dec_prev]))
+                # sample from the distrib to get z
+                z = self.sampleQ(self.mu[t],self.sigma[t])
+                # retrieve the hidden layer of RNN
+                h_dec, dec_state = self.decode_layer(dec_state, z)
+                # map from hidden layer -> image portion, and then write it.
+                # self.cs[t] = c_prev + self.write_basic(h_dec)
+                self.cs[t] = c_prev + self.write_attention(h_dec)
+                h_dec_prev = h_dec
+                self.share_parameters = True  # from now on, share variables
 
         # the final timestep
         self.generated_images = tf.nn.sigmoid(self.cs[-1])
@@ -257,6 +261,13 @@ class Draw():
                         results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_colors])
                         print(results_square.shape)
                         ims("results/"+str(e)+"-"+str(i)+"-step-"+str(cs_iter)+".jpg",merge_color(results_square,[8,8]))
+
+
+    def load_images(self, path, pattern):
+        data = glob(os.path.join(path, pattern))
+        images = [get_image(file) for file in data]  # [batch, height, width, channels]
+        images = np.array(images).astype(np.float32)
+        self.images = images  # no need to feed anymore
 
 
     def view(self):
