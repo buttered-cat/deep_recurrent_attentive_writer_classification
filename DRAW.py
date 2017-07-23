@@ -49,6 +49,8 @@ class Draw():
         # x = tf.reshape(self.images, [-1, self.img_size*self.img_size*self.num_colors])
         # x = self.images     # [batch, height, width, channel]
         self.attn_params = []
+        # self.generated_images = []
+        self.generation_loss = []
         for t in range(self.sequence_length):
             # TODO: generate one computational graph for each image? That doesn't sound good
             batch_image_list = tf.unstack(self.images)
@@ -57,13 +59,12 @@ class Draw():
             r = []
             h_dec_prev = []
             z = []
-            # mu = []
-            # logsigma = []
-            # sigma = []
-            for i in range(tf.shape(self.images)):
+
+            for i in range(tf.shape(self.images)[0]):
                 # for each image:
                 # error image + original image
-                c_prev[i] = tf.zeros((1, tf.shape(batch_image_list[i]) * tf.shape(batch_image_list[i][0]))) if t == 0 else self.canvas[i][t - 1]
+                batch_image_list_shape = tf.shape(batch_image_list[i])
+                c_prev[i][t] = tf.zeros((batch_image_list_shape[0] * batch_image_list_shape[1])) if t == 0 else self.canvas[i][t - 1]
                 x_hat[i] = batch_image_list[i] - tf.sigmoid(c_prev[i])
                 # read the image
                 # r = self.read_basic(x,x_hat,h_dec_prev)
@@ -82,14 +83,23 @@ class Draw():
                 h_dec_prev[i] = h_dec
                 self.share_parameters = True  # from now on, share variables
 
+        canvas_list = []
+        generation_loss_list = []
+        for i in range(tf.shape(self.canvas)[0]):
+            canvas_list[i] = self.canvas[i][-1]     # final canvas per image
+            generation_loss_list[i] = tf.nn.l2_loss(self.images[i] - self.canvas[i][-1])    # error image per image
+
         # the final timestep
         # TODO: why sigmoid?
-        self.generated_images = tf.nn.sigmoid(self.canvas[-1])
+        # canvas shape: [batch, height, width, channel]
+        # self.generated_images = tf.nn.sigmoid(np.array([c[-1] for c in self.canvas]))
+        self.generated_images = tf.nn.sigmoid(canvas_list)
 
         # log likelihood of binary image
-        # self.generation_loss = tf.reduce_mean(-tf.reduce_sum(self.images * tf.log(1e-10 + self.generated_images) + (1-self.images) * tf.log(1e-10 + 1 - self.generated_images), 1))
-        self.generation_loss = tf.nn.l2_loss(i - self.generated_images)
         # TODO: better measure
+        # self.generation_loss = tf.reduce_mean(-tf.reduce_sum(self.images * tf.log(1e-10 + self.generated_images) + (1-self.images) * tf.log(1e-10 + 1 - self.generated_images), 1))
+        # TODO: mean or sum?
+        self.generation_loss = tf.reduce_sum(generation_loss_list)
 
         kl_terms = [0]*self.sequence_length
         for t in range(self.sequence_length):
