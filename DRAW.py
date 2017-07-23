@@ -12,7 +12,7 @@ class Draw():
     def __init__(self):
 
         self.img_size = 64
-        self.num_colors = 3
+        self.num_channels = 3
 
         self.attention_n = 5
         self.n_hidden = 256     # img_size_x * img_size_y
@@ -24,9 +24,9 @@ class Draw():
         # TODO: variable image size: maybe classify by size and do batch matrix multiplication
         # checkout https://stackoverflow.com/questions/38966533/different-image-sizes-in-tensorflow-with-batch-size-1
         # and https://gist.github.com/eerwitt/518b0c9564e500b4b50f
-        # self.images = tf.placeholder(tf.float32, [None, self.img_size, self.img_size, self.num_colors])
-        self.images = None
-        self.load_images("./data/train", "*.jpg")
+        self.images = tf.placeholder(tf.float32, [None, None, None, self.num_channels])       # variable image size
+        # self.images = None
+        # self.load_images("./data/train", "*.jpg")
 
         self.e = tf.random_normal((self.batch_size, self.n_z), mean=0, stddev=1) # Qsampler noise
 
@@ -34,43 +34,61 @@ class Draw():
         self.lstm_enc = tf.nn.rnn_cell.LSTMCell(self.n_hidden, state_is_tuple=True) # encoder Op
         self.lstm_dec = tf.nn.rnn_cell.LSTMCell(self.n_hidden, state_is_tuple=True) # decoder Op
 
-        self.cs = [0] * self.sequence_length
-        self.mu, self.logsigma, self.sigma = [0] * self.sequence_length, [0] * self.sequence_length, [0] * self.sequence_length
+        # self.canvas = [0] * self.sequence_length
+        self.canvas = []
+        # self.mu, self.logsigma, self.sigma = [0] * self.sequence_length, [0] * self.sequence_length, [0] * self.sequence_length
+        self.mu, self.logsigma, self.sigma = [], [], []
 
         h_dec_prev = tf.zeros((self.batch_size, self.n_hidden))
-        enc_state = self.lstm_enc.zero_state(self.batch_size, tf.float32)
-        dec_state = self.lstm_dec.zero_state(self.batch_size, tf.float32)
+        enc_state = self.lstm_enc.zero_state(tf.shape(self.images), tf.float32)
+        dec_state = self.lstm_dec.zero_state(tf.shape(self.images), tf.float32)
+
+        enc_state = tf.unstack(enc_state)
+        dec_state = tf.unstack(dec_state)
 
         # x = tf.reshape(self.images, [-1, self.img_size*self.img_size*self.num_colors])
         # x = self.images     # [batch, height, width, channel]
         self.attn_params = []
         for t in range(self.sequence_length):
-            # TODO: problems with image feeding - batch
-            for x in range(len(self.images)):
+            # TODO: generate one computational graph for each image? That doesn't sound good
+            batch_image_list = tf.unstack(self.images)
+            c_prev = []
+            x_hat = []
+            r = []
+            h_dec_prev = []
+            z = []
+            # mu = []
+            # logsigma = []
+            # sigma = []
+            for i in range(tf.shape(self.images)):
+                # for each image:
                 # error image + original image
-                c_prev = tf.zeros((1, len(x) * len(x[0]) * len(x[0][0]))) if t == 0 else self.cs[t-1]
-                x_hat = x - tf.sigmoid(c_prev)
+                c_prev[i] = tf.zeros((1, tf.shape(batch_image_list[i]) * tf.shape(batch_image_list[i][0]))) if t == 0 else self.canvas[i][t - 1]
+                x_hat[i] = batch_image_list[i] - tf.sigmoid(c_prev[i])
                 # read the image
                 # r = self.read_basic(x,x_hat,h_dec_prev)
-                r = self.read_attention(x,x_hat,h_dec_prev)
+                r[i] = self.read_attention(batch_image_list[i],x_hat[i],h_dec_prev[i])
                 # encode it to gauss distrib
-                self.mu[t], self.logsigma[t], self.sigma[t], enc_state = self.encode(enc_state, tf.concat(1, [r, h_dec_prev]))
+                self.mu[i][t], self.logsigma[i][t], self.sigma[i][t], new_enc_state = self.encode(enc_state, tf.concat(1, [r[i], h_dec_prev[i]]))
+                enc_state[i].assign(new_enc_state)
                 # sample from the distrib to get z
-                z = self.sampleQ(self.mu[t],self.sigma[t])
+                z[i] = self.sampleQ(self.mu[i][t], self.sigma[i][t])
                 # retrieve the hidden layer of RNN
-                h_dec, dec_state = self.decode_layer(dec_state, z)
+                h_dec, new_dec_state = self.decode_layer(dec_state[i], z[i])
+                dec_state[i].assign(new_dec_state)
                 # map from hidden layer -> image portion, and then write it.
                 # self.cs[t] = c_prev + self.write_basic(h_dec)
-                self.cs[t] = c_prev + self.write_attention(h_dec)
-                h_dec_prev = h_dec
+                self.canvas[i][t] = c_prev[i] + self.write_attention(h_dec)
+                h_dec_prev[i] = h_dec
                 self.share_parameters = True  # from now on, share variables
 
         # the final timestep
-        self.generated_images = tf.nn.sigmoid(self.cs[-1])
+        # TODO: why sigmoid?
+        self.generated_images = tf.nn.sigmoid(self.canvas[-1])
 
         # log likelihood of binary image
         # self.generation_loss = tf.reduce_mean(-tf.reduce_sum(self.images * tf.log(1e-10 + self.generated_images) + (1-self.images) * tf.log(1e-10 + 1 - self.generated_images), 1))
-        self.generation_loss = tf.nn.l2_loss(x - self.generated_images)
+        self.generation_loss = tf.nn.l2_loss(i - self.generated_images)
         # TODO: better measure
 
         kl_terms = [0]*self.sequence_length
@@ -148,11 +166,11 @@ class Draw():
             # Fx,Fy = [64,5,32]
             # img = [64, 32*32*3]
 
-            img = tf.reshape(img, [-1, self.img_size, self.img_size, self.num_colors])
+            img = tf.reshape(img, [-1, self.img_size, self.img_size, self.num_channels])
             img_t = tf.transpose(img, perm=[3,0,1,2])
 
             # color1, color2, color3, color1, color2, color3, etc.
-            batch_colors_array = tf.reshape(img_t, [self.num_colors * self.batch_size, self.img_size, self.img_size])
+            batch_colors_array = tf.reshape(img_t, [self.num_channels * self.batch_size, self.img_size, self.img_size])
             Fx_array = tf.concat(0, [Fx, Fx, Fx])
             Fy_array = tf.concat(0, [Fy, Fy, Fy])
 
@@ -160,9 +178,9 @@ class Draw():
 
             # Apply the gaussian patches:
             glimpse = tf.batch_matmul(Fy_array, tf.batch_matmul(batch_colors_array, Fxt))
-            glimpse = tf.reshape(glimpse, [self.num_colors, self.batch_size, self.attention_n, self.attention_n])
+            glimpse = tf.reshape(glimpse, [self.num_channels, self.batch_size, self.attention_n, self.attention_n])
             glimpse = tf.transpose(glimpse, [1,2,3,0])
-            glimpse = tf.reshape(glimpse, [self.batch_size, self.attention_n*self.attention_n*self.num_colors])
+            glimpse = tf.reshape(glimpse, [self.batch_size, self.attention_n * self.attention_n * self.num_channels])
             # finally scale this glimpse w/ the gamma parameter
             return glimpse * tf.reshape(gamma, [-1, 1])
         x = filter_img(x, Fx, Fy, gamma)
@@ -197,30 +215,30 @@ class Draw():
     def write_basic(self, hidden_layer):
         # map RNN hidden state to image
         with tf.variable_scope("write", reuse=self.share_parameters):
-            decoded_image_portion = dense(hidden_layer, self.n_hidden, self.img_size*self.img_size*self.num_colors)
+            decoded_image_portion = dense(hidden_layer, self.n_hidden, self.img_size * self.img_size * self.num_channels)
             # decoded_image_portion = tf.reshape(decoded_image_portion, [-1, self.img_size, self.img_size, self.num_colors])
         return decoded_image_portion
 
     def write_attention(self, hidden_layer):
         with tf.variable_scope("writeW", reuse=self.share_parameters):
-            w = dense(hidden_layer, self.n_hidden, self.attention_n*self.attention_n*self.num_colors)
+            w = dense(hidden_layer, self.n_hidden, self.attention_n * self.attention_n * self.num_channels)
 
-        w = tf.reshape(w, [self.batch_size, self.attention_n, self.attention_n, self.num_colors])
+        w = tf.reshape(w, [self.batch_size, self.attention_n, self.attention_n, self.num_channels])
         w_t = tf.transpose(w, perm=[3,0,1,2])
         Fx, Fy, gamma = self.attn_window("write", hidden_layer)
 
         # color1, color2, color3, color1, color2, color3, etc.
-        w_array = tf.reshape(w_t, [self.num_colors * self.batch_size, self.attention_n, self.attention_n])
+        w_array = tf.reshape(w_t, [self.num_channels * self.batch_size, self.attention_n, self.attention_n])
         Fx_array = tf.concat(0, [Fx, Fx, Fx])
         Fy_array = tf.concat(0, [Fy, Fy, Fy])
 
         Fyt = tf.transpose(Fy_array, perm=[0,2,1])
         # [vert, attn_n] * [attn_n, attn_n] * [attn_n, horiz]
         wr = tf.batch_matmul(Fyt, tf.batch_matmul(w_array, Fx_array))
-        sep_colors = tf.reshape(wr, [self.batch_size, self.num_colors, self.img_size**2])
-        wr = tf.reshape(wr, [self.num_colors, self.batch_size, self.img_size, self.img_size])
+        sep_colors = tf.reshape(wr, [self.batch_size, self.num_channels, self.img_size ** 2])
+        wr = tf.reshape(wr, [self.num_channels, self.batch_size, self.img_size, self.img_size])
         wr = tf.transpose(wr, [1,2,3,0])
-        wr = tf.reshape(wr, [self.batch_size, self.img_size * self.img_size * self.num_colors])
+        wr = tf.reshape(wr, [self.batch_size, self.img_size * self.img_size * self.num_channels])
         return wr * tf.reshape(1.0/gamma, [-1, 1])
 
 
@@ -243,9 +261,9 @@ class Draw():
                 batch_images = np.array(batch).astype(np.float32)
                 batch_images += 1
                 batch_images /= 2
-                self.images = batch_images      # no need to feed anymore
+                # self.images = batch_images      # no need to feed anymore
 
-                cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([self.cs, self.attn_params, self.generation_loss, self.latent_loss, self.train_op])
+                cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([self.canvas, self.attn_params, self.generation_loss, self.latent_loss, self.train_op], feed_dict={self.images: batch_images})
                 print("epoch %d iter %d genloss %f latloss %f" % (e, i, gen_loss, lat_loss))
                 # print(attn_params[0].shape)
                 # print(attn_params[1].shape)
@@ -258,16 +276,16 @@ class Draw():
 
                     for cs_iter in range(10):
                         results = cs[cs_iter]
-                        results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_colors])
+                        results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_channels])
                         print(results_square.shape)
                         ims("results/"+str(e)+"-"+str(i)+"-step-"+str(cs_iter)+".jpg",merge_color(results_square,[8,8]))
 
 
-    def load_images(self, path, pattern):
-        data = glob(os.path.join(path, pattern))
-        images = [get_image(file) for file in data]  # [batch, height, width, channels]
-        images = np.array(images).astype(np.float32)
-        self.images = images  # no need to feed anymore
+    # def load_images(self, path, pattern):
+    #     data = glob(os.path.join(path, pattern))
+    #     images = [get_image(file) for file in data]  # [batch, height, width, channels]
+    #     images = np.array(images).astype(np.float32)
+    #     self.images = images  # no need to feed anymore
 
 
     def view(self):
@@ -275,14 +293,14 @@ class Draw():
         base = np.array([get_image(sample_file) for sample_file in data[0:64]])
         base += 1
         base /= 2
-        self.images = base
+        # self.images = base
 
         ims("results/base.jpg",merge_color(base,[8,8]))
 
         saver = tf.train.Saver(max_to_keep=2)
         saver.restore(self.sess, tf.train.latest_checkpoint(os.getcwd()+"/training/"))
 
-        cs, attn_params, gen_loss, lat_loss = self.sess.run([self.cs, self.attn_params, self.generation_loss, self.latent_loss])
+        cs, attn_params, gen_loss, lat_loss = self.sess.run([self.canvas, self.attn_params, self.generation_loss, self.latent_loss], feed_dict={self.images: base})
         print("genloss %f latloss %f" % (gen_loss, lat_loss))
 
         cs = 1.0/(1.0+np.exp(-np.array(cs))) # x_recons=sigmoid(canvas)
@@ -293,7 +311,7 @@ class Draw():
 
         for cs_iter in range(10):
             results = cs[cs_iter]
-            results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_colors])
+            results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_channels])
 
             print(np.shape(results_square))
 
