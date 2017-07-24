@@ -8,6 +8,9 @@ import os
 
 # TODO: validation + early stopping. Maybe hold-out + cross validation the rest?
 
+# problem with the whole program is the framework doesn't support "ragged" tensors well, see
+# https://datascience.stackexchange.com/questions/15056/how-to-use-lists-in-tensorflow
+# maybe a new set of mathematical notations?
 class Draw():
     def __init__(self):
 
@@ -35,14 +38,19 @@ class Draw():
         self.lstm_dec = tf.nn.rnn_cell.LSTMCell(self.n_hidden, state_is_tuple=True) # decoder Op
 
         # self.canvas = [0] * self.sequence_length
+        # canvas: of shape [batch_size, time, canvas_size]
         self.canvas = []
         # self.mu, self.logsigma, self.sigma = [0] * self.sequence_length, [0] * self.sequence_length, [0] * self.sequence_length
         self.mu, self.logsigma, self.sigma = [], [], []
 
-        h_dec_prev = tf.zeros((self.batch_size, self.n_hidden))
+        # h_dec_prev: decoder state of previous time step, list of tensors
+        h_dec_prev = []
+        # h_dec_prev = tf.zeros((self.batch_size, self.n_hidden))
+
         enc_state = self.lstm_enc.zero_state(tf.shape(self.images), tf.float32)
         dec_state = self.lstm_dec.zero_state(tf.shape(self.images), tf.float32)
 
+        # flatten w.r.t #images
         enc_state = tf.unstack(enc_state)
         dec_state = tf.unstack(dec_state)
 
@@ -52,42 +60,80 @@ class Draw():
         # self.generated_images = []
         self.generation_loss = []
         for t in range(self.sequence_length):
-            # TODO: generate one computational graph for each image? That doesn't sound good
+            # TODO: generate one computational graph for each image? That doesn't sound good... see start of class def
             batch_image_list = tf.unstack(self.images)
+            # TODO: convert all lists to tensors?
+            # c_prev: with shape [batch_size, time], each element is a tensor of an image canvas
             c_prev = []
+            # x_hat: list of tensors
             x_hat = []
+            # r: list of tensors
             r = []
-            h_dec_prev = []
+            # z: list of tensors
             z = []
 
             for i in range(tf.shape(self.images)[0]):
                 # for each image:
                 # error image + original image
                 batch_image_list_shape = tf.shape(batch_image_list[i])
-                c_prev[i][t] = tf.zeros((batch_image_list_shape[0] * batch_image_list_shape[1])) if t == 0 else self.canvas[i][t - 1]
-                x_hat[i] = batch_image_list[i] - tf.sigmoid(c_prev[i])
+
+                x_hat.append(batch_image_list[i] - tf.sigmoid(c_prev[i]))
                 # read the image
                 # r = self.read_basic(x,x_hat,h_dec_prev)
-                r[i] = self.read_attention(batch_image_list[i],x_hat[i],h_dec_prev[i])
+                # TODO: what size of output does it return?
+                r.append(self.read_attention(batch_image_list[i],x_hat[i],h_dec_prev[i]))
                 # encode it to gauss distrib
-                self.mu[i][t], self.logsigma[i][t], self.sigma[i][t], new_enc_state = self.encode(enc_state, tf.concat(1, [r[i], h_dec_prev[i]]))
+
+                new_mu, new_logsigma, new_sigma, new_enc_state = self.encode(enc_state,
+                                                                             tf.concat(1, [r[i], h_dec_prev[i]]))
+
+                if t == 0:
+                    # initialize canvas history
+                    c_prev.append([tf.zeros((batch_image_list_shape[0] * batch_image_list_shape[1]))])
+
+                    # initialize gaussian latent dist history
+                    self.mu.append([new_mu])
+                    self.logsigma.append([new_logsigma])
+                    self.sigma.append([new_sigma])
+                else:
+                    # t-th time step of image #i
+                    self.mu[t].append(new_mu)
+                    self.logsigma[t].append(new_logsigma)
+                    self.sigma[t].append(new_sigma)
+
+                    c_prev[i].append(self.canvas[i][t - 1])
+
+                # self.mu[i][t], self.logsigma[i][t], self.sigma[i][t], new_enc_state = self.encode(enc_state, tf.concat(1, [r[i], h_dec_prev[i]]))
                 enc_state[i].assign(new_enc_state)
+
                 # sample from the distrib to get z
+                # TODO: further research, dont' quite understand
                 z[i] = self.sampleQ(self.mu[i][t], self.sigma[i][t])
                 # retrieve the hidden layer of RNN
                 h_dec, new_dec_state = self.decode_layer(dec_state[i], z[i])
                 dec_state[i].assign(new_dec_state)
                 # map from hidden layer -> image portion, and then write it.
                 # self.cs[t] = c_prev + self.write_basic(h_dec)
-                self.canvas[i][t] = c_prev[i] + self.write_attention(h_dec)
-                h_dec_prev[i] = h_dec
-                self.share_parameters = True  # from now on, share variables
+
+                if t == 0:
+                    # initialize canvas
+                    self.canvas.append([c_prev[i] + self.write_attention(h_dec)])
+
+                    # initialize previous decoder state
+                    h_dec_prev.append(h_dec)
+                else:
+                    self.canvas[i].append(c_prev[i] + self.write_attention(h_dec))
+                    h_dec_prev[i] = h_dec
+
+            self.share_parameters = True  # from now on, share variables
 
         canvas_list = []
         generation_loss_list = []
+        # TODO: is this legal? (range)
+        # check https://stackoverflow.com/questions/35330117/how-can-i-run-a-loop-with-a-tensor-as-its-range-in-tensorflow
         for i in range(tf.shape(self.canvas)[0]):
-            canvas_list[i] = self.canvas[i][-1]     # final canvas per image
-            generation_loss_list[i] = tf.nn.l2_loss(self.images[i] - self.canvas[i][-1])    # error image per image
+            canvas_list.append(self.canvas[i][-1])     # final canvas per image
+            generation_loss_list.append(tf.nn.l2_loss(self.images[i] - self.canvas[i][-1]))    # error image per image
 
         # the final timestep
         # TODO: why sigmoid?
