@@ -62,7 +62,6 @@ class Draw():
         for t in range(self.sequence_length):
             # TODO: generate one computational graph for each image? That doesn't sound good... see start of class def
             batch_image_list = tf.unstack(self.images)
-            # TODO: convert all lists to tensors?
             # c_prev: with shape [batch_size, time], each element is a tensor of an image canvas
             c_prev = []
             # x_hat: list of tensors
@@ -72,7 +71,13 @@ class Draw():
             # z: list of tensors
             z = []
 
-            for i in range(tf.shape(self.images)[0]):
+            i0 = tf.constant(0)
+
+            # for i in range(tf.shape(self.images)[0]):
+            def while_cond(i):
+                return i < tf.shape(self.images)[0]
+
+            def while_body(i):
                 # for each image:
                 # error image + original image
                 batch_image_list_shape = tf.shape(batch_image_list[i])
@@ -81,7 +86,7 @@ class Draw():
                 # read the image
                 # r = self.read_basic(x,x_hat,h_dec_prev)
                 # TODO: what size of output does it return?
-                r.append(self.read_attention(batch_image_list[i],x_hat[i],h_dec_prev[i]))
+                r.append(self.read_attention(batch_image_list[i], x_hat[i], h_dec_prev[i]))
                 # encode it to gauss distrib
 
                 new_mu, new_logsigma, new_sigma, new_enc_state = self.encode(enc_state,
@@ -125,15 +130,30 @@ class Draw():
                     self.canvas[i].append(c_prev[i] + self.write_attention(h_dec))
                     h_dec_prev[i] = h_dec
 
+                tf.while_loop(while_cond, while_body, loop_vars=[i])
+
             self.share_parameters = True  # from now on, share variables
 
         canvas_list = []
         generation_loss_list = []
-        # TODO: is this legal? (range)
+
         # check https://stackoverflow.com/questions/35330117/how-can-i-run-a-loop-with-a-tensor-as-its-range-in-tensorflow
-        for i in range(tf.shape(self.canvas)[0]):
-            canvas_list.append(self.canvas[i][-1])     # final canvas per image
-            generation_loss_list.append(tf.nn.l2_loss(self.images[i] - self.canvas[i][-1]))    # error image per image
+        i0 = tf.constant(0)
+
+        def while_cond(i, c, l):
+            return i < tf.shape(self.canvas)[0]      # for all images in a batch
+
+        def while_body(i, c, l):
+            c.append(self.canvas[i][-1])     # final canvas per image
+            l.append(tf.nn.l2_loss(self.images[i] - self.canvas[i][-1]))    # error image per image
+            return [i + 1, c, l]
+
+        # canvas_list, generation_loss_list = tf.while_loop(while_cond, while_body, loop_vars=[canvas_list, generation_loss_list])
+        tf.while_loop(while_cond, while_body, loop_vars=[i0, canvas_list, generation_loss_list])
+
+        # for i in range(tf.shape(self.canvas)[0]):
+        #     canvas_list.append(self.canvas[i][-1])     # final canvas per image
+        #     generation_loss_list.append(tf.nn.l2_loss(self.images[i] - self.canvas[i][-1]))    # error image per image
 
         # the final timestep
         # TODO: why sigmoid?
@@ -216,26 +236,36 @@ class Draw():
         return tf.concat(1,[x,x_hat])
 
     def read_attention(self, x, x_hat, h_dec_prev):
+        # per image
         Fx, Fy, gamma = self.attn_window("read", h_dec_prev, image_size_x, image_size_y)
         # we have the parameters for a patch of gaussian filters. apply them.
         def filter_img(img, Fx, Fy, gamma):
+            # TODO: single image
+
+            # original:
             # Fx,Fy = [64,5,32]
             # img = [64, 32*32*3]
 
-            img = tf.reshape(img, [-1, self.img_size, self.img_size, self.num_channels])
-            img_t = tf.transpose(img, perm=[3,0,1,2])
+            # now:
+            # img: height * width * channel
 
+            # img = tf.reshape(img, [-1, self.img_size, self.img_size, self.num_channels])    # batch * height * width * channel
+            # img_t = tf.transpose(img, perm=[3,0,1,2])   # channel * batch * height * width
+            img_t = tf.transpose(img, perm=[3, 0, 1])   # channel * height * width
+
+            # TODO: from here
             # color1, color2, color3, color1, color2, color3, etc.
             batch_colors_array = tf.reshape(img_t, [self.num_channels * self.batch_size, self.img_size, self.img_size])
             Fx_array = tf.concat(0, [Fx, Fx, Fx])
             Fy_array = tf.concat(0, [Fy, Fy, Fy])
 
-            Fxt = tf.transpose(Fx_array, perm=[0,2,1])
+            Fxt = tf.transpose(Fx_array, perm=[0,2,1])      # transpose in-batch
 
             # Apply the gaussian patches:
-            glimpse = tf.batch_matmul(Fy_array, tf.batch_matmul(batch_colors_array, Fxt))
+            glimpse = tf.batch_matmul(Fy_array, tf.batch_matmul(batch_colors_array, Fxt))   # tensor mul
             glimpse = tf.reshape(glimpse, [self.num_channels, self.batch_size, self.attention_n, self.attention_n])
             glimpse = tf.transpose(glimpse, [1,2,3,0])
+            # TODO: how does reshape behave?
             glimpse = tf.reshape(glimpse, [self.batch_size, self.attention_n * self.attention_n * self.num_channels])
             # finally scale this glimpse w/ the gamma parameter
             return glimpse * tf.reshape(gamma, [-1, 1])
