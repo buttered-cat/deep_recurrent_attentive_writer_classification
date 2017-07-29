@@ -237,11 +237,10 @@ class Draw():
 
     def read_attention(self, x, x_hat, h_dec_prev):
         # per image
+        # TODO: single image
         Fx, Fy, gamma = self.attn_window("read", h_dec_prev, image_size_x, image_size_y)
         # we have the parameters for a patch of gaussian filters. apply them.
         def filter_img(img, Fx, Fy, gamma):
-            # TODO: single image
-
             # original:
             # Fx,Fy = [64,5,32]
             # img = [64, 32*32*3]
@@ -251,23 +250,25 @@ class Draw():
 
             # img = tf.reshape(img, [-1, self.img_size, self.img_size, self.num_channels])    # batch * height * width * channel
             # img_t = tf.transpose(img, perm=[3,0,1,2])   # channel * batch * height * width
-            img_t = tf.transpose(img, perm=[3, 0, 1])   # channel * height * width
+            img_t = tf.transpose(img, perm=[3, 0, 1])   # [channel, height, width]
 
-            # TODO: from here
             # color1, color2, color3, color1, color2, color3, etc.
-            batch_colors_array = tf.reshape(img_t, [self.num_channels * self.batch_size, self.img_size, self.img_size])
-            Fx_array = tf.concat(0, [Fx, Fx, Fx])
+            # batch_colors_array = tf.reshape(img_t, [self.num_channels * self.batch_size, self.img_size, self.img_size])
+            batch_colors_array = img_t
+            Fx_array = tf.concat(0, [Fx, Fx, Fx])       # 3 channels
             Fy_array = tf.concat(0, [Fy, Fy, Fy])
 
-            Fxt = tf.transpose(Fx_array, perm=[0,2,1])      # transpose in-batch
+            Fxt = tf.transpose(Fx_array, perm=[0,2,1])      # transpose per image
 
             # Apply the gaussian patches:
+            # square patch
+            # TODO: variable aspect ratio glimpse?
             glimpse = tf.batch_matmul(Fy_array, tf.batch_matmul(batch_colors_array, Fxt))   # tensor mul
-            glimpse = tf.reshape(glimpse, [self.num_channels, self.batch_size, self.attention_n, self.attention_n])
-            glimpse = tf.transpose(glimpse, [1,2,3,0])
+            # glimpse = tf.reshape(glimpse, [self.num_channels, self.batch_size, self.attention_n, self.attention_n])
+            glimpse = tf.transpose(glimpse, [1, 2, 0])      # [height, width, channel]
             # TODO: how does reshape behave?
             glimpse = tf.reshape(glimpse, [self.batch_size, self.attention_n * self.attention_n * self.num_channels])
-            # finally scale this glimpse w/ the gamma parameter
+            # finally scale this glimpse with the gamma parameter
             return glimpse * tf.reshape(gamma, [-1, 1])
         x = filter_img(x, Fx, Fy, gamma)
         x_hat = filter_img(x_hat, Fx, Fy, gamma)

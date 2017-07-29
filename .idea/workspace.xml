@@ -21,8 +21,8 @@
       <file leaf-file-name="DRAW.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/DRAW.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="285">
-              <caret line="255" column="29" lean-forward="false" selection-start-line="255" selection-start-column="29" selection-end-line="255" selection-end-column="29" />
+            <state relative-caret-position="525">
+              <caret line="274" column="35" lean-forward="true" selection-start-line="274" selection-start-column="35" selection-end-line="274" selection-end-column="35" />
               <folding>
                 <element signature="e#0#23#0" expanded="true" />
               </folding>
@@ -33,93 +33,9 @@
       <file leaf-file-name="gen_array_ops.py" pinned="false" current-in-tab="false">
         <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/gen_array_ops.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="498">
-              <caret line="2394" column="19" lean-forward="true" selection-start-line="2394" selection-start-column="19" selection-end-line="2394" selection-end-column="19" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="control_flow_ops.py" pinned="false" current-in-tab="false">
-        <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/control_flow_ops.py">
-          <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="19">
-              <caret line="2507" column="4" lean-forward="false" selection-start-line="2507" selection-start-column="4" selection-end-line="2507" selection-end-column="4" />
+              <caret line="2377" column="4" lean-forward="false" selection-start-line="2377" selection-start-column="4" selection-end-line="2377" selection-end-column="4" />
               <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="array_ops.py" pinned="false" current-in-tab="false">
-        <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/array_ops.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-566">
-              <caret line="1298" column="4" lean-forward="false" selection-start-line="1298" selection-start-column="4" selection-end-line="1298" selection-end-column="4" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="math_ops.py" pinned="false" current-in-tab="false">
-        <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/math_ops.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="194">
-              <caret line="1733" column="34" lean-forward="true" selection-start-line="1733" selection-start-column="34" selection-end-line="1733" selection-end-column="34" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="gen_math_ops.py" pinned="false" current-in-tab="false">
-        <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/gen_math_ops.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="194">
-              <caret line="331" column="4" lean-forward="false" selection-start-line="331" selection-start-column="4" selection-end-line="331" selection-end-column="4" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="gen_nn_ops.py" pinned="false" current-in-tab="false">
-        <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/gen_nn_ops.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="27493">
-              <caret line="1458" column="28" lean-forward="false" selection-start-line="1458" selection-start-column="20" selection-end-line="1458" selection-end-column="28" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="utils.py" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/utils.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="152">
-              <caret line="8" column="4" lean-forward="false" selection-start-line="8" selection-start-column="4" selection-end-line="8" selection-end-column="4" />
-              <folding>
-                <element signature="e#0#17#0" expanded="true" />
-              </folding>
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="gen_image_ops.py" pinned="false" current-in-tab="false">
-        <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/gen_image_ops.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="61">
-              <caret line="266" column="4" lean-forward="false" selection-start-line="266" selection-start-column="4" selection-end-line="266" selection-end-column="4" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="ops.py" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/ops.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="114">
-              <caret line="7" column="33" lean-forward="false" selection-start-line="7" selection-start-column="33" selection-end-line="7" selection-end-column="33" />
-              <folding>
-                <element signature="e#0#18#0" expanded="true" />
-              </folding>
             </state>
           </provider>
         </entry>
@@ -534,7 +450,7 @@
         <state relative-caret-position="912">
           <caret line="52" column="4" lean-forward="false" selection-start-line="52" selection-start-column="4" selection-end-line="52" selection-end-column="4" />
           <folding>
-            <element signature="e#0#17#0" expanded="true" />
+            <element signature="e#0#17#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -543,9 +459,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="114">
           <caret line="7" column="33" lean-forward="false" selection-start-line="7" selection-start-column="33" selection-end-line="7" selection-end-column="33" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -564,7 +477,7 @@
         <state relative-caret-position="969">
           <caret line="55" column="0" lean-forward="false" selection-start-line="55" selection-start-column="0" selection-end-line="55" selection-end-column="0" />
           <folding>
-            <element signature="e#0#17#0" expanded="true" />
+            <element signature="e#0#17#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -573,9 +486,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="114">
           <caret line="7" column="33" lean-forward="false" selection-start-line="7" selection-start-column="33" selection-end-line="7" selection-end-column="33" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -594,7 +504,7 @@
         <state relative-caret-position="969">
           <caret line="55" column="0" lean-forward="false" selection-start-line="55" selection-start-column="0" selection-end-line="55" selection-end-column="0" />
           <folding>
-            <element signature="e#0#17#0" expanded="true" />
+            <element signature="e#0#17#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -603,9 +513,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="114">
           <caret line="7" column="33" lean-forward="false" selection-start-line="7" selection-start-column="33" selection-end-line="7" selection-end-column="33" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -624,7 +531,7 @@
         <state relative-caret-position="912">
           <caret line="52" column="0" lean-forward="true" selection-start-line="52" selection-start-column="0" selection-end-line="52" selection-end-column="0" />
           <folding>
-            <element signature="e#0#17#0" expanded="true" />
+            <element signature="e#0#17#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -633,9 +540,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="114">
           <caret line="7" column="33" lean-forward="false" selection-start-line="7" selection-start-column="33" selection-end-line="7" selection-end-column="33" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -654,7 +558,7 @@
         <state relative-caret-position="76">
           <caret line="8" column="26" lean-forward="false" selection-start-line="8" selection-start-column="26" selection-end-line="8" selection-end-column="26" />
           <folding>
-            <element signature="e#0#17#0" expanded="true" />
+            <element signature="e#0#17#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -663,9 +567,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="114">
           <caret line="7" column="33" lean-forward="false" selection-start-line="7" selection-start-column="33" selection-end-line="7" selection-end-column="33" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -684,7 +585,7 @@
         <state relative-caret-position="76">
           <caret line="8" column="26" lean-forward="false" selection-start-line="8" selection-start-column="26" selection-end-line="8" selection-end-column="26" />
           <folding>
-            <element signature="e#0#17#0" expanded="true" />
+            <element signature="e#0#17#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -695,9 +596,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="114">
           <caret line="7" column="33" lean-forward="false" selection-start-line="7" selection-start-column="33" selection-end-line="7" selection-end-column="33" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -716,7 +614,7 @@
         <state relative-caret-position="76">
           <caret line="8" column="26" lean-forward="true" selection-start-line="8" selection-start-column="26" selection-end-line="8" selection-end-column="26" />
           <folding>
-            <element signature="e#0#17#0" expanded="true" />
+            <element signature="e#0#17#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -727,9 +625,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="114">
           <caret line="7" column="33" lean-forward="false" selection-start-line="7" selection-start-column="33" selection-end-line="7" selection-end-column="33" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -748,7 +643,7 @@
         <state relative-caret-position="0">
           <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding>
-            <element signature="e#0#17#0" expanded="true" />
+            <element signature="e#0#17#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -757,9 +652,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="114">
           <caret line="7" column="33" lean-forward="true" selection-start-line="7" selection-start-column="33" selection-end-line="7" selection-end-column="33" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -778,7 +670,7 @@
         <state relative-caret-position="551">
           <caret line="33" column="49" lean-forward="true" selection-start-line="33" selection-start-column="49" selection-end-line="33" selection-end-column="49" />
           <folding>
-            <element signature="e#0#17#0" expanded="true" />
+            <element signature="e#0#17#0" expanded="false" />
           </folding>
         </state>
       </provider>
@@ -787,9 +679,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="114">
           <caret line="7" column="33" lean-forward="true" selection-start-line="7" selection-start-column="33" selection-end-line="7" selection-end-column="33" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
@@ -806,7 +695,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="2337">
           <caret line="144" column="6" lean-forward="false" selection-start-line="144" selection-start-column="6" selection-end-line="144" selection-end-column="6" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -814,7 +702,6 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="27493">
           <caret line="1458" column="28" lean-forward="false" selection-start-line="1458" selection-start-column="20" selection-end-line="1458" selection-end-column="28" />
-          <folding />
         </state>
       </provider>
     </entry>
@@ -822,74 +709,66 @@
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="114">
           <caret line="7" column="33" lean-forward="false" selection-start-line="7" selection-start-column="33" selection-end-line="7" selection-end-column="33" />
-          <folding>
-            <element signature="e#0#18#0" expanded="true" />
-          </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/control_flow_ops.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="19">
+        <state relative-caret-position="47120">
           <caret line="2507" column="4" lean-forward="false" selection-start-line="2507" selection-start-column="4" selection-end-line="2507" selection-end-column="4" />
-          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/array_ops.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-566">
+        <state relative-caret-position="24263">
           <caret line="1298" column="4" lean-forward="false" selection-start-line="1298" selection-start-column="4" selection-end-line="1298" selection-end-column="4" />
-          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/gen_math_ops.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="194">
+        <state relative-caret-position="6080">
           <caret line="331" column="4" lean-forward="false" selection-start-line="331" selection-start-column="4" selection-end-line="331" selection-end-column="4" />
-          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/math_ops.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="194">
-          <caret line="1733" column="34" lean-forward="true" selection-start-line="1733" selection-start-column="34" selection-end-line="1733" selection-end-column="34" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/gen_array_ops.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="498">
-          <caret line="2394" column="19" lean-forward="true" selection-start-line="2394" selection-start-column="19" selection-end-line="2394" selection-end-column="19" />
-          <folding />
+        <state relative-caret-position="32509">
+          <caret line="1733" column="34" lean-forward="false" selection-start-line="1733" selection-start-column="34" selection-end-line="1733" selection-end-column="34" />
         </state>
       </provider>
     </entry>
     <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/gen_image_ops.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="61">
+        <state relative-caret-position="4845">
           <caret line="266" column="4" lean-forward="false" selection-start-line="266" selection-start-column="4" selection-end-line="266" selection-end-column="4" />
-          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/utils.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="152">
+        <state relative-caret-position="76">
           <caret line="8" column="4" lean-forward="false" selection-start-line="8" selection-start-column="4" selection-end-line="8" selection-end-column="4" />
           <folding>
-            <element signature="e#0#17#0" expanded="true" />
+            <element signature="e#0#17#0" expanded="false" />
           </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/gen_array_ops.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="19">
+          <caret line="2377" column="4" lean-forward="false" selection-start-line="2377" selection-start-column="4" selection-end-line="2377" selection-end-column="4" />
+          <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/DRAW.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="285">
-          <caret line="255" column="29" lean-forward="false" selection-start-line="255" selection-start-column="29" selection-end-line="255" selection-end-column="29" />
+        <state relative-caret-position="525">
+          <caret line="274" column="35" lean-forward="true" selection-start-line="274" selection-start-column="35" selection-end-line="274" selection-end-column="35" />
           <folding>
             <element signature="e#0#23#0" expanded="true" />
           </folding>
