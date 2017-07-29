@@ -66,7 +66,7 @@ def dense(x, inputFeatures, outputFeatures, scope=None, with_w=False):
         if with_w:
             return tf.matmul(x, matrix) + bias, matrix, bias
         else:
-            return tf.matmul(x, matrix) + bias
+            return tf.matmul(x, matrix) + bias      # [-1, outputFeatures]
 
 def merge(images, size):
     h, w = images.shape[1], images.shape[2]

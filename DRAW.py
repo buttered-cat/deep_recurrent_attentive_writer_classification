@@ -11,6 +11,7 @@ import os
 # problem with the whole program is the framework doesn't support "ragged" tensors well, see
 # https://datascience.stackexchange.com/questions/15056/how-to-use-lists-in-tensorflow
 # maybe a new set of mathematical notations?
+# TODO: need a memory mechanism
 class Draw():
     def __init__(self):
 
@@ -18,7 +19,7 @@ class Draw():
         self.num_channels = 3
 
         self.attention_n = 5
-        self.n_hidden = 256     # img_size_x * img_size_y
+        self.n_hidden = 256
         self.n_z = 10
         self.sequence_length = 10
         self.batch_size = 64
@@ -60,7 +61,7 @@ class Draw():
         # self.generated_images = []
         self.generation_loss = []
         for t in range(self.sequence_length):
-            # TODO: generate one computational graph for each image? That doesn't sound good... see start of class def
+            # TODO: generate one computational graph for each image? No, euivalent to batch_size = 1. see start of class def
             batch_image_list = tf.unstack(self.images)
             # c_prev: with shape [batch_size, time], each element is a tensor of an image canvas
             c_prev = []
@@ -188,39 +189,45 @@ class Draw():
     # given a hidden decoder layer:
     # locate where to put attention filters
     # TODO: maybe variable window aspect ratio?
-    def attn_window(self, scope, h_dec, image_size_x, image_size_y):
+    def attn_window(self, scope, h_dec, img_shape):
         with tf.variable_scope(scope, reuse=self.share_parameters):
-            parameters = dense(h_dec, self.n_hidden, 5)
+            parameters = dense(h_dec, self.n_hidden, 5)     # [batch, 5]
         # gx_, gy_: center of 2d gaussian on a scale of -1 to 1
-        gx_, gy_, log_sigma2, log_delta, log_gamma = tf.split(1,5,parameters)
+        gx_, gy_, log_sigma2, log_delta, log_gamma = tf.split(1, 5, parameters)   # each: [batch, 1]
 
-        # move gx/gy to be a scale of -imgsize to +imgsize
-        gx = (self.img_size+1)/2 * (gx_ + 1)
-        gy = (self.img_size+1)/2 * (gy_ + 1)
+        # move gx/gy to be a scale of -imgsize to +imgsize (?)
+        # dense() doesn't seem to guarantee positiveness, but that's not a problem. See paper
+        # "The scaling...is chosen to ensure that the initial patch...roughly covers the whole image."
+        gx = (img_shape[1]+1)/2 * (gx_ + 1)
+        gy = (img_shape[0]+1)/2 * (gy_ + 1)
 
         sigma2 = tf.exp(log_sigma2)
         # stride/delta: how far apart these patches will be
-        delta = (self.img_size - 1) / ((self.attention_n-1) * tf.exp(log_delta))
+        # typo?
+        # delta = (self.img_size - 1) / ((self.attention_n-1) * tf.exp(log_delta))
+        delta = (tf.maximum(img_shape[0], img_shape[1]) - 1) / (self.attention_n-1) * tf.exp(log_delta)
         # returns [Fx, Fy, gamma]
 
-        self.attn_params.append([gx, gy, delta])
+        gamma = tf.exp(log_gamma)
+        self.attn_params.append([gx, gy, delta, sigma2, gamma])
 
-        return self.filterbank(gx,gy,sigma2,delta, image_size_x, image_size_y) + (tf.exp(log_gamma),)
+        return self.filterbank(gx, gy, sigma2, delta, img_shape) + (gamma,)
 
     # Given a center, distance, and spread
     # Construct [attention_n x attention_n] patches of gaussian filters
     # represented by Fx = horizontal gaussian, Fy = vertical guassian
-    def filterbank(self, gx, gy, sigma2, delta, image_size_x, image_size_y):
+    def filterbank(self, gx, gy, sigma2, delta, img_size):
         # 1 x N, look like [[0,1,2,3,4]]
-        grid_i = tf.reshape(tf.cast(tf.range(self.attention_n), tf.float32),[1, -1])
+        grid_i = tf.reshape(tf.cast(tf.range(self.attention_n), tf.float32), [1, -1])
         # centers for the individual patches
-        mu_x = gx + (grid_i - self.attention_n/2 - 0.5) * delta
-        mu_y = gy + (grid_i - self.attention_n/2 - 0.5) * delta
+        mu_x = gx + (grid_i - (self.attention_n + 1)/2) * delta
+        mu_y = gy + (grid_i - (self.attention_n + 1)/2) * delta
+        # TODO: from here
         mu_x = tf.reshape(mu_x, [-1, self.attention_n, 1])
         mu_y = tf.reshape(mu_y, [-1, self.attention_n, 1])
         # 1 x 1 x imgsize, looks like [[[0,1,2,3,4,...,27]]]
-        im_x = tf.reshape(tf.cast(tf.range(image_size_x), tf.float32), [1, 1, -1])     # TODO: image size as param
-        im_y = tf.reshape(tf.cast(tf.range(image_size_y), tf.float32), [1, 1, -1])
+        im_x = tf.reshape(tf.cast(tf.range(img_size[1]), tf.float32), [1, 1, -1])
+        im_y = tf.reshape(tf.cast(tf.range(img_size[0]), tf.float32), [1, 1, -1])
         # list of gaussian curves for x and y
         sigma2 = tf.reshape(sigma2, [-1, 1, 1])
         Fx = tf.exp(-tf.square((im_x - mu_x) / (2*sigma2)))
@@ -238,7 +245,7 @@ class Draw():
     def read_attention(self, x, x_hat, h_dec_prev):
         # per image
         # TODO: single image
-        Fx, Fy, gamma = self.attn_window("read", h_dec_prev, image_size_x, image_size_y)
+        Fx, Fy, gamma = self.attn_window("read", h_dec_prev, tf.shape(x))
         # we have the parameters for a patch of gaussian filters. apply them.
         def filter_img(img, Fx, Fy, gamma):
             # original:
@@ -252,7 +259,6 @@ class Draw():
             # img_t = tf.transpose(img, perm=[3,0,1,2])   # channel * batch * height * width
             img_t = tf.transpose(img, perm=[3, 0, 1])   # [channel, height, width]
 
-            # color1, color2, color3, color1, color2, color3, etc.
             # batch_colors_array = tf.reshape(img_t, [self.num_channels * self.batch_size, self.img_size, self.img_size])
             batch_colors_array = img_t
             Fx_array = tf.concat(0, [Fx, Fx, Fx])       # 3 channels
@@ -266,8 +272,9 @@ class Draw():
             glimpse = tf.batch_matmul(Fy_array, tf.batch_matmul(batch_colors_array, Fxt))   # tensor mul
             # glimpse = tf.reshape(glimpse, [self.num_channels, self.batch_size, self.attention_n, self.attention_n])
             glimpse = tf.transpose(glimpse, [1, 2, 0])      # [height, width, channel]
-            # TODO: how does reshape behave?
-            glimpse = tf.reshape(glimpse, [self.batch_size, self.attention_n * self.attention_n * self.num_channels])
+            # reshape: iterate through two tensors simultaneously, and fill the elements
+            # glimpse = tf.reshape(glimpse, [self.batch_size, self.attention_n * self.attention_n * self.num_channels])
+            glimpse = tf.reshape(glimpse, [1, -1])      # [1, height * width * channel]
             # finally scale this glimpse with the gamma parameter
             return glimpse * tf.reshape(gamma, [-1, 1])
         x = filter_img(x, Fx, Fy, gamma)
