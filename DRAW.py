@@ -131,9 +131,9 @@ class Draw():
                     self.canvas[i].append(c_prev[i] + self.write_attention(h_dec))
                     h_dec_prev[i] = h_dec
 
-                tf.while_loop(while_cond, while_body, loop_vars=[i])
+                self.share_parameters = True  # share variables after the first loop
 
-            self.share_parameters = True  # from now on, share variables
+            tf.while_loop(while_cond, while_body, loop_vars=[i0])
 
         canvas_list = []
         generation_loss_list = []
@@ -284,7 +284,7 @@ class Draw():
     def encode(self, prev_state, image):
         # update the RNN with image
         with tf.variable_scope("encoder",reuse=self.share_parameters):
-            #TODO: from here
+            # TODO: from here
             # see https://www.quora.com/What-is-the-meaning-of-%E2%80%9CThe-number-of-units-in-the-LSTM-cell
             hidden_layer, next_state = self.lstm_enc(image, prev_state)
 
