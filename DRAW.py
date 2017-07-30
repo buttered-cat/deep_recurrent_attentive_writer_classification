@@ -193,7 +193,7 @@ class Draw():
         with tf.variable_scope(scope, reuse=self.share_parameters):
             parameters = dense(h_dec, self.n_hidden, 5)     # [batch, 5]
         # gx_, gy_: center of 2d gaussian on a scale of -1 to 1
-        gx_, gy_, log_sigma2, log_delta, log_gamma = tf.split(1, 5, parameters)   # each: [batch, 1]
+        gx_, gy_, log_sigma2, log_delta, log_gamma = tf.split(1, 5, parameters)   # each: [1(batch), 1]
 
         # move gx/gy to be a scale of -imgsize to +imgsize (?)
         # dense() doesn't seem to guarantee positiveness, but that's not a problem. See paper
@@ -220,22 +220,21 @@ class Draw():
         # 1 x N, look like [[0,1,2,3,4]]
         grid_i = tf.reshape(tf.cast(tf.range(self.attention_n), tf.float32), [1, -1])
         # centers for the individual patches
-        mu_x = gx + (grid_i - (self.attention_n + 1)/2) * delta
+        mu_x = gx + (grid_i - (self.attention_n + 1)/2) * delta     # [1(batch), self.attention_n]
         mu_y = gy + (grid_i - (self.attention_n + 1)/2) * delta
-        # TODO: from here
-        mu_x = tf.reshape(mu_x, [-1, self.attention_n, 1])
+        mu_x = tf.reshape(mu_x, [-1, self.attention_n, 1])          # [1(batch), self.attention_n, 1]
         mu_y = tf.reshape(mu_y, [-1, self.attention_n, 1])
         # 1 x 1 x imgsize, looks like [[[0,1,2,3,4,...,27]]]
-        im_x = tf.reshape(tf.cast(tf.range(img_size[1]), tf.float32), [1, 1, -1])
+        im_x = tf.reshape(tf.cast(tf.range(img_size[1]), tf.float32), [1, 1, -1])       # [1, 1, img_size[1]]
         im_y = tf.reshape(tf.cast(tf.range(img_size[0]), tf.float32), [1, 1, -1])
         # list of gaussian curves for x and y
-        sigma2 = tf.reshape(sigma2, [-1, 1, 1])
-        Fx = tf.exp(-tf.square((im_x - mu_x) / (2*sigma2)))
+        sigma2 = tf.reshape(sigma2, [-1, 1, 1])     # [1(batch), 1, 1]
+        Fx = tf.exp(-tf.square((im_x - mu_x) / (2*sigma2)))     # [1(batch), self.attention_n, img_size[1]]
         Fy = tf.exp(-tf.square((im_y - mu_y) / (2*sigma2)))
         # normalize so area-under-curve = 1
-        Fx = Fx / tf.maximum(tf.reduce_sum(Fx,2,keep_dims=True),1e-8)
-        Fy = Fy / tf.maximum(tf.reduce_sum(Fy,2,keep_dims=True),1e-8)
-        return Fx, Fy
+        Fx = Fx / tf.maximum(tf.reduce_sum(Fx, 2, keep_dims=True), 1e-8)
+        Fy = Fy / tf.maximum(tf.reduce_sum(Fy, 2, keep_dims=True), 1e-8)
+        return Fx, Fy       # [1(batch), self.attention_n, img_size[1 | 0]]
 
 
     # the read() operation without attention
@@ -277,9 +276,9 @@ class Draw():
             glimpse = tf.reshape(glimpse, [1, -1])      # [1, height * width * channel]
             # finally scale this glimpse with the gamma parameter
             return glimpse * tf.reshape(gamma, [-1, 1])
-        x = filter_img(x, Fx, Fy, gamma)
+        x = filter_img(x, Fx, Fy, gamma)            # [self.attention_n, self.attention_n]
         x_hat = filter_img(x_hat, Fx, Fy, gamma)
-        return tf.concat(1, [x, x_hat])
+        return tf.concat(1, [x, x_hat])        # [1(batch), self.attention_n, 2 * self.attention_n]
 
     # encode an attention patch
     def encode(self, prev_state, image):
