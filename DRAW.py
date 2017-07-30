@@ -61,7 +61,7 @@ class Draw():
         # self.generated_images = []
         self.generation_loss = []
         for t in range(self.sequence_length):
-            # TODO: generate one computational graph for each image? No, euivalent to batch_size = 1. see start of class def
+            # TODO: generate one computation graph for each image? No, euivalent to batch_size = 1. see start of class def
             batch_image_list = tf.unstack(self.images)
             # c_prev: with shape [batch_size, time], each element is a tensor of an image canvas
             c_prev = []
@@ -72,10 +72,11 @@ class Draw():
             # z: list of tensors
             z = []
 
+            # below defines computation graph
             i0 = tf.constant(0)
 
             # for i in range(tf.shape(self.images)[0]):
-            def while_cond(i):
+            def while_cond(i):      # for all images in a batch
                 return i < tf.shape(self.images)[0]
 
             def while_body(i):
@@ -86,8 +87,7 @@ class Draw():
                 x_hat.append(batch_image_list[i] - tf.sigmoid(c_prev[i]))
                 # read the image
                 # r = self.read_basic(x,x_hat,h_dec_prev)
-                # TODO: what size of output does it return?
-                r.append(self.read_attention(batch_image_list[i], x_hat[i], h_dec_prev[i]))
+                r.append(self.read_attention(batch_image_list[i], x_hat[i], h_dec_prev[i]))     # [self.attention_n, 2 * self.attention_n]
                 # encode it to gauss distrib
 
                 new_mu, new_logsigma, new_sigma, new_enc_state = self.encode(enc_state,
@@ -190,8 +190,8 @@ class Draw():
     # locate where to put attention filters
     # TODO: maybe variable window aspect ratio?
     def attn_window(self, scope, h_dec, img_shape):
-        with tf.variable_scope(scope, reuse=self.share_parameters):
-            parameters = dense(h_dec, self.n_hidden, 5)     # [batch, 5]
+        # with tf.variable_scope(scope, reuse=self.share_parameters):
+        parameters = dense(h_dec, self.n_hidden, 5, scope=scope, reuse_params=self.share_parameters)     # [batch, 5]
         # gx_, gy_: center of 2d gaussian on a scale of -1 to 1
         gx_, gy_, log_sigma2, log_delta, log_gamma = tf.split(1, 5, parameters)   # each: [1(batch), 1]
 
@@ -215,26 +215,26 @@ class Draw():
 
     # Given a center, distance, and spread
     # Construct [attention_n x attention_n] patches of gaussian filters
-    # represented by Fx = horizontal gaussian, Fy = vertical guassian
+    # represented by Fx = horizontal gaussian, Fy = vertical gaussian
     def filterbank(self, gx, gy, sigma2, delta, img_size):
         # 1 x N, look like [[0,1,2,3,4]]
-        grid_i = tf.reshape(tf.cast(tf.range(self.attention_n), tf.float32), [1, -1])
+        grid_i = tf.cast(tf.range(self.attention_n), tf.float32)
         # centers for the individual patches
-        mu_x = gx + (grid_i - (self.attention_n + 1)/2) * delta     # [1(batch), self.attention_n]
+        mu_x = gx + (grid_i - (self.attention_n + 1)/2) * delta     # [self.attention_n]
         mu_y = gy + (grid_i - (self.attention_n + 1)/2) * delta
-        mu_x = tf.reshape(mu_x, [-1, self.attention_n, 1])          # [1(batch), self.attention_n, 1]
-        mu_y = tf.reshape(mu_y, [-1, self.attention_n, 1])
+        mu_x = tf.reshape(mu_x, [self.attention_n, 1])          # [self.attention_n, 1]
+        mu_y = tf.reshape(mu_y, [self.attention_n, 1])
         # 1 x 1 x imgsize, looks like [[[0,1,2,3,4,...,27]]]
-        im_x = tf.reshape(tf.cast(tf.range(img_size[1]), tf.float32), [1, 1, -1])       # [1, 1, img_size[1]]
-        im_y = tf.reshape(tf.cast(tf.range(img_size[0]), tf.float32), [1, 1, -1])
+        im_x = tf.reshape(tf.cast(tf.range(img_size[1]), tf.float32), [1, -1])       # [1, 1, img_size[1]]
+        im_y = tf.reshape(tf.cast(tf.range(img_size[0]), tf.float32), [1, -1])
         # list of gaussian curves for x and y
-        sigma2 = tf.reshape(sigma2, [-1, 1, 1])     # [1(batch), 1, 1]
-        Fx = tf.exp(-tf.square((im_x - mu_x) / (2*sigma2)))     # [1(batch), self.attention_n, img_size[1]]
+        # sigma2 = tf.reshape(sigma2, [-1, 1, 1])     # [1(batch), 1, 1]
+        Fx = tf.exp(-tf.square((im_x - mu_x) / (2*sigma2)))     # [self.attention_n, img_size[1]]
         Fy = tf.exp(-tf.square((im_y - mu_y) / (2*sigma2)))
         # normalize so area-under-curve = 1
         Fx = Fx / tf.maximum(tf.reduce_sum(Fx, 2, keep_dims=True), 1e-8)
         Fy = Fy / tf.maximum(tf.reduce_sum(Fy, 2, keep_dims=True), 1e-8)
-        return Fx, Fy       # [1(batch), self.attention_n, img_size[1 | 0]]
+        return Fx, Fy       # [self.attention_n, img_size[1 | 0]]
 
 
     # the read() operation without attention
@@ -278,7 +278,7 @@ class Draw():
             return glimpse * tf.reshape(gamma, [-1, 1])
         x = filter_img(x, Fx, Fy, gamma)            # [self.attention_n, self.attention_n]
         x_hat = filter_img(x_hat, Fx, Fy, gamma)
-        return tf.concat(1, [x, x_hat])        # [1(batch), self.attention_n, 2 * self.attention_n]
+        return tf.concat(1, [x, x_hat])        # [self.attention_n, 2 * self.attention_n]
 
     # encode an attention patch
     def encode(self, prev_state, image):
@@ -287,10 +287,12 @@ class Draw():
             hidden_layer, next_state = self.lstm_enc(image, prev_state)
 
         # map the RNN hidden state to latent variables
-        with tf.variable_scope("mu", reuse=self.share_parameters):
-            mu = dense(hidden_layer, self.n_hidden, self.n_z)
+        # TODO: latent bug? dense() modifies scope if not provided
+        # with tf.variable_scope("mu", reuse=self.share_parameters):
+        mu = dense(hidden_layer, self.n_hidden, self.n_z, scope="mu", reuse_params=self.share_parameters)
+        # with tf.variable_scope("sigma", reuse=self.share_parameters):
+        logsigma = dense(hidden_layer, self.n_hidden, self.n_z, scope="sigma", reuse_params=self.share_parameters)
         with tf.variable_scope("sigma", reuse=self.share_parameters):
-            logsigma = dense(hidden_layer, self.n_hidden, self.n_z)
             sigma = tf.exp(logsigma)
         return mu, logsigma, sigma, next_state
 
@@ -307,14 +309,18 @@ class Draw():
 
     def write_basic(self, hidden_layer):
         # map RNN hidden state to image
-        with tf.variable_scope("write", reuse=self.share_parameters):
-            decoded_image_portion = dense(hidden_layer, self.n_hidden, self.img_size * self.img_size * self.num_channels)
-            # decoded_image_portion = tf.reshape(decoded_image_portion, [-1, self.img_size, self.img_size, self.num_colors])
+        # with tf.variable_scope("write", reuse=self.share_parameters):
+        decoded_image_portion = dense(hidden_layer,
+                                      self.n_hidden, self.img_size * self.img_size * self.num_channels,
+                                      scope="write",
+                                      reuse_params=self.share_parameters)
+        # decoded_image_portion = tf.reshape(decoded_image_portion, [-1, self.img_size, self.img_size, self.num_colors])
         return decoded_image_portion
 
     def write_attention(self, hidden_layer):
-        with tf.variable_scope("writeW", reuse=self.share_parameters):
-            w = dense(hidden_layer, self.n_hidden, self.attention_n * self.attention_n * self.num_channels)
+        # with tf.variable_scope("write_attention", reuse=self.share_parameters):
+        w = dense(hidden_layer, self.n_hidden, self.attention_n * self.attention_n * self.num_channels,
+                  scope="write_attention", reuse_params=self.share_parameters)
 
         w = tf.reshape(w, [self.batch_size, self.attention_n, self.attention_n, self.num_channels])
         w_t = tf.transpose(w, perm=[3,0,1,2])
