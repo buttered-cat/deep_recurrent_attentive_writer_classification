@@ -284,6 +284,8 @@ class Draw():
     def encode(self, prev_state, image):
         # update the RNN with image
         with tf.variable_scope("encoder",reuse=self.share_parameters):
+            #TODO: from here
+            # see https://www.quora.com/What-is-the-meaning-of-%E2%80%9CThe-number-of-units-in-the-LSTM-cell
             hidden_layer, next_state = self.lstm_enc(image, prev_state)
 
         # map the RNN hidden state to latent variables
