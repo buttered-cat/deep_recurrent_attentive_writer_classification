@@ -20,7 +20,7 @@ class Draw():
 
         self.attention_n = 5
         self.n_hidden = 256
-        self.n_z = 10
+        self.n_z = 10       # latent code length
         self.sequence_length = 10
         self.batch_size = 64
         self.share_parameters = False
@@ -92,6 +92,7 @@ class Draw():
 
                 new_mu, new_logsigma, new_sigma, new_enc_state = self.encode(enc_state,
                                                                              tf.concat(1, [r[i], h_dec_prev[i]]))
+                # mu and sigma: [self.n_z] latent code length
 
                 if t == 0:
                     # initialize canvas history
@@ -110,12 +111,13 @@ class Draw():
                     c_prev[i].append(self.canvas[i][t - 1])
 
                 # self.mu[i][t], self.logsigma[i][t], self.sigma[i][t], new_enc_state = self.encode(enc_state, tf.concat(1, [r[i], h_dec_prev[i]]))
-                enc_state[i].assign(new_enc_state)
+                enc_state[i].assign(new_enc_state)      # per image
 
                 # sample from the distrib to get z
                 # TODO: further research, dont' quite understand
-                z[i] = self.sampleQ(self.mu[i][t], self.sigma[i][t])
+                z[i] = self.sampleQ(self.mu[t][i], self.sigma[t][i])
                 # retrieve the hidden layer of RNN
+                # TODO: from here
                 h_dec, new_dec_state = self.decode_layer(dec_state[i], z[i])
                 dec_state[i].assign(new_dec_state)
                 # map from hidden layer -> image portion, and then write it.
@@ -284,14 +286,14 @@ class Draw():
     def encode(self, prev_state, image):
         # update the RNN with image
         with tf.variable_scope("encoder",reuse=self.share_parameters):
-            # TODO: from here
             # see https://www.quora.com/What-is-the-meaning-of-%E2%80%9CThe-number-of-units-in-the-LSTM-cell
-            hidden_layer, next_state = self.lstm_enc(image, prev_state)
+            # and https://stackoverflow.com/questions/36732877/about-lstm-cell-state-size
+            hidden_layer, next_state = self.lstm_enc(image, prev_state)     # each: self.n_hidden?
 
         # map the RNN hidden state to latent variables
         # TODO: latent bug? dense() modifies scope if not provided
         # with tf.variable_scope("mu", reuse=self.share_parameters):
-        mu = dense(hidden_layer, self.n_hidden, self.n_z, scope="mu", reuse_params=self.share_parameters)
+        mu = dense(hidden_layer, self.n_hidden, self.n_z, scope="mu", reuse_params=self.share_parameters)   # [self.n_z]
         # with tf.variable_scope("sigma", reuse=self.share_parameters):
         logsigma = dense(hidden_layer, self.n_hidden, self.n_z, scope="sigma", reuse_params=self.share_parameters)
         with tf.variable_scope("sigma", reuse=self.share_parameters):
