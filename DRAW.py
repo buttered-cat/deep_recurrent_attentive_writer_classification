@@ -46,6 +46,7 @@ class Draw():
         # canvas: of shape [batch_size, time, canvas_size]
         self.canvas = []
         # self.mu, self.logsigma, self.sigma = [0] * self.sequence_length, [0] * self.sequence_length, [0] * self.sequence_length
+        # mu, logsigma, sigma: [self.sequence_length, (less or equal than) batch_size]
         self.mu, self.logsigma, self.sigma = [], [], []
 
         # h_dec_prev: decoder state of previous time step, list of tensors
@@ -98,6 +99,7 @@ class Draw():
                                                                              tf.concat(1, [r[i], h_dec_prev[i]]))
                 # mu and sigma: [self.n_z] latent code length
 
+                # TODO: t == 0 or i == 0? From here
                 if t == 0:
                     # initialize canvas history
                     c_prev.append([tf.zeros((batch_image_list_shape[0] * batch_image_list_shape[1]))])
@@ -108,6 +110,7 @@ class Draw():
                     self.sigma.append([new_sigma])
                 else:
                     # t-th time step of image #i
+                    # TODO: some bug
                     self.mu[t].append(new_mu)
                     self.logsigma[t].append(new_logsigma)
                     self.sigma[t].append(new_sigma)
@@ -176,10 +179,24 @@ class Draw():
         # TODO: from here
         kl_terms = [0]*self.sequence_length
         for t in range(self.sequence_length):
-            mu2 = tf.square(self.mu[t])
-            sigma2 = tf.square(self.sigma[t])
-            logsigma = self.logsigma[t]
-            kl_terms[t] = 0.5 * tf.reduce_sum(mu2 + sigma2 - 2*logsigma, 1) - self.sequence_length*0.5
+
+            def while_cond(i, mu_list, sigma_list, logsigma_list, kl_terms_list):
+                return i < tf.shape(mu_list[0])[0]
+
+            def while_body(i, mu_list, sigma_list, logsigma_list, kl_terms_list):
+                mu2 = tf.square(mu_list[i])
+                sigma2 = tf.square(sigma_list[i])
+                logsigma = logsigma_list[i]
+                kl_terms_list.append(0.5 * tf.reduce_sum(mu2 + sigma2 - 2*logsigma, 1) - self.sequence_length*0.5)
+
+                return [i + 1, mu_list, sigma_list, logsigma_list, kl_terms_list]
+
+            i0 = tf.constant(0)
+            _, _, _, _, kl_terms_list = tf.while_loop(while_cond, while_body, loop_vars=[i0, self.mu[t], self.sigma[t], self.logsigma[t], []])
+
+            kl_terms_batch_vector = tf.stack(kl_terms_list)     # [batch_size]
+            kl_terms[t] = kl_terms_batch_vector     # [batch_size]
+
         self.latent_loss = tf.reduce_mean(tf.add_n(kl_terms))
         self.cost = self.generation_loss + self.latent_loss
         optimizer = tf.train.AdamOptimizer(1e-3, beta1=0.5)
