@@ -43,7 +43,7 @@ class Draw():
         self.lstm_dec = tf.nn.rnn_cell.LSTMCell(self.n_hidden, state_is_tuple=True) # decoder Op
 
         # self.canvas = [0] * self.sequence_length
-        # canvas: of shape [batch_size, time, canvas_size]
+        # canvas: list of shape [batch_size, time, canvas_size]
         self.canvas = []
         # self.mu, self.logsigma, self.sigma = [0] * self.sequence_length, [0] * self.sequence_length, [0] * self.sequence_length
         # mu, logsigma, sigma: [(less or equal than) batch_size, self.sequence_length]
@@ -376,19 +376,27 @@ class Draw():
 
     def train(self):
         data = glob(os.path.join("./data/train", "*.jpg"))
-        base = np.array([get_image(sample_file) for sample_file in data[0:64]])     # TODO: what does base do?
+        # base: first 64 images of the training set
+        base = np.array([get_image(sample_file) for sample_file in data[0:64]])
         base += 1
         base /= 2
 
-        ims("results/base.jpg",merge_color(base,[8,8]))
+        # merge the first 64 images to an 8*8 image
+        # TODO: doesn't work on variable size image dataset
+        # TODO: pixel value range?
+        ims("results/base.jpg",merge_color(base,[8,8]))     # 0 <= each pixel <= 1
 
         saver = tf.train.Saver(max_to_keep=2)
 
         for e in range(10):
             # epoch
-            for i in range((len(data) / self.batch_size) - 2):
-
-                batch_files = data[i*self.batch_size:(i+1)*self.batch_size]
+            # why skipping 2 batches?
+            # for i in range((len(data) / self.batch_size) - 2):
+            data_len = len(data)
+            for i in range(data_len / self.batch_size
+                           + (1 if data_len % self.batch_size is not 0 else 0)):
+                batch_upper_bound = (i+1)*self.batch_size if i != data_len / self.batch_size + 1 else data_len
+                batch_files = data[i*self.batch_size: batch_upper_bound]
                 batch = [get_image(batch_file) for batch_file in batch_files]   # [batch, height, width, channels]
                 batch_images = np.array(batch).astype(np.float32)
                 batch_images += 1
