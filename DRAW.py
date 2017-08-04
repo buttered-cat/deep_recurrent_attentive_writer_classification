@@ -131,7 +131,7 @@ class Draw():
                 # map from hidden layer -> image portion, and then write it.
                 # self.cs[t] = c_prev + self.write_basic(h_dec)
 
-                # TODO: canvas size vs. write window size
+                # TODO: from here: canvas size vs. write window size
                 if t == 0:
                     # initialize canvas
                     self.canvas.append([c_prev[i] + self.write_attention(h_dec, tf.shape(batch_image_list[i]))])
@@ -421,11 +421,11 @@ class Draw():
 
                     # cs = 1.0/(1.0+np.exp(-np.array(cs)))    # x_recons=sigmoid(canvas)
 
-                    for cs_iter in range(10):
-                        results = cs[cs_iter]
-                        results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_channels])
-                        print(results_square.shape)
-                        save_image("results/" + str(e) + "-" + str(i) + "-step-" + str(cs_iter) + ".jpg", merge_color(results_square, [8, 8]))
+                    for cs_iter in range(10):       # print first 10 images in canvas
+                        img = cs[cs_iter][-1]
+                        # results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_channels])
+                        # print(results_square.shape)
+                        save_image("results/" + str(e) + "-" + str(i) + "-#" + str(cs_iter) + ".jpg", img)
 
 
     # def load_images(self, path, pattern):
