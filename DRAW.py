@@ -11,6 +11,9 @@ import os
 # active memory?
 # https://papers.nips.cc/paper/6295-can-active-memory-replace-attention.pdf
 
+# tensorflow and list
+# https://datascience.stackexchange.com/questions/15056/how-to-use-lists-in-tensorflow
+
 # problem with the whole program is the framework doesn't support "ragged" tensors well, see
 # https://datascience.stackexchange.com/questions/15056/how-to-use-lists-in-tensorflow
 # maybe a new set of mathematical notations?
@@ -43,7 +46,7 @@ class Draw():
         self.lstm_dec = tf.nn.rnn_cell.LSTMCell(self.n_hidden, state_is_tuple=True) # decoder Op
 
         # self.canvas = [0] * self.sequence_length
-        # canvas: list of shape [batch_size, time, canvas_size]
+        # canvas: list of tensors [batch_size, time, canvas_size]
         self.canvas = []
         # self.mu, self.logsigma, self.sigma = [0] * self.sequence_length, [0] * self.sequence_length, [0] * self.sequence_length
         # mu, logsigma, sigma: [(less or equal than) batch_size, self.sequence_length]
@@ -128,6 +131,7 @@ class Draw():
                 # map from hidden layer -> image portion, and then write it.
                 # self.cs[t] = c_prev + self.write_basic(h_dec)
 
+                # TODO: canvas size vs. write window size
                 if t == 0:
                     # initialize canvas
                     self.canvas.append([c_prev[i] + self.write_attention(h_dec, tf.shape(batch_image_list[i]))])
@@ -377,48 +381,51 @@ class Draw():
     def train(self):
         data = glob(os.path.join("./data/train", "*.jpg"))
         # base: first 64 images of the training set
-        base = np.array([get_image(sample_file) for sample_file in data[0:64]])
-        base += 1
-        base /= 2
+        # base = np.array([get_image(sample_file) for sample_file in data[0:64]])
+        # base += 1
+        # base /= 2
 
         # merge the first 64 images to an 8*8 image
         # TODO: doesn't work on variable size image dataset
         # TODO: pixel value range?
-        ims("results/base.jpg",merge_color(base,[8,8]))     # 0 <= each pixel <= 1
+        # save_image("results/base.jpg", merge_color(base, [8, 8]))     # 0 <= each pixel <= 1?
 
-        saver = tf.train.Saver(max_to_keep=2)
+        saver = tf.train.Saver(max_to_keep=5)
 
+        data_len = len(data)
+        num_batch = data_len / self.batch_size + (1 if data_len % self.batch_size is not 0 else 0)
         for e in range(10):
             # epoch
             # why skipping 2 batches?
             # for i in range((len(data) / self.batch_size) - 2):
-            data_len = len(data)
-            for i in range(data_len / self.batch_size
-                           + (1 if data_len % self.batch_size is not 0 else 0)):
+            for i in range(num_batch):
+                # i: batch number
                 batch_upper_bound = (i+1)*self.batch_size if i != data_len / self.batch_size + 1 else data_len
                 batch_files = data[i*self.batch_size: batch_upper_bound]
-                batch = [get_image(batch_file) for batch_file in batch_files]   # [batch, height, width, channels]
-                batch_images = np.array(batch).astype(np.float32)
-                batch_images += 1
-                batch_images /= 2
+                batch = [get_image(batch_file) for batch_file in batch_files]   # [batch, tensor[height, width, channels]]
+                batch = tf.stack(batch)        # [batch, height, width, channels]
+
+                # batch_images = np.array(batch).astype(np.float32)
+                # batch_images += 1
+                # batch_images /= 2
                 # self.images = batch_images      # no need to feed anymore
 
-                cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([self.canvas, self.attn_params, self.generation_loss, self.latent_loss, self.train_op], feed_dict={self.images: batch_images})
+                cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([self.canvas, self.attn_params, self.generation_loss, self.latent_loss, self.train_op], feed_dict={self.images: batch})
                 print("epoch %d iter %d genloss %f latloss %f" % (e, i, gen_loss, lat_loss))
                 # print(attn_params[0].shape)
                 # print(attn_params[1].shape)
                 # print(attn_params[2].shape)
                 if i % 800 == 0:
 
-                    saver.save(self.sess, os.getcwd() + "/training/train", global_step=e*10000 + i)
+                    saver.save(self.sess, os.getcwd() + "/model", global_step=e*10000 + i)
 
-                    cs = 1.0/(1.0+np.exp(-np.array(cs))) # x_recons=sigmoid(canvas)
+                    # cs = 1.0/(1.0+np.exp(-np.array(cs)))    # x_recons=sigmoid(canvas)
 
                     for cs_iter in range(10):
                         results = cs[cs_iter]
                         results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_channels])
                         print(results_square.shape)
-                        ims("results/"+str(e)+"-"+str(i)+"-step-"+str(cs_iter)+".jpg",merge_color(results_square,[8,8]))
+                        save_image("results/" + str(e) + "-" + str(i) + "-step-" + str(cs_iter) + ".jpg", merge_color(results_square, [8, 8]))
 
 
     # def load_images(self, path, pattern):
@@ -435,7 +442,7 @@ class Draw():
         base /= 2
         # self.images = base
 
-        ims("results/base.jpg",merge_color(base,[8,8]))
+        save_image("results/base.jpg", merge_color(base, [8, 8]))
 
         saver = tf.train.Saver(max_to_keep=2)
         saver.restore(self.sess, tf.train.latest_checkpoint(os.getcwd()+"/training/"))
@@ -483,7 +490,7 @@ class Draw():
 
             print(results_square)
 
-            ims("results/view-clean-step-"+str(cs_iter)+".jpg",merge_color(results_square,[8,8]))
+            save_image("results/view-clean-step-" + str(cs_iter) + ".jpg", merge_color(results_square, [8, 8]))
 
 
 

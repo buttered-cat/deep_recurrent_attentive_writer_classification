@@ -6,9 +6,13 @@ import _pickle as cPickle
 
 
 # check https://stackoverflow.com/questions/38966533/different-image-sizes-in-tensorflow-with-batch-size-1
-def get_image(image_path):
+def get_image(image_path, desired_type=None):
     with open(image_path, mode='rb') as file:
-        return tf.image.decode_jpeg(file.read(), channels=3)
+        img = tf.image.decode_jpeg(file.read(), channels=3)
+        if desired_type is None:
+            return img
+        else:
+            return tf.cast(img, tf.float32)
         # [height, width, channels] tensor
 
 def transform(image, npx=64, is_crop=True):
@@ -50,7 +54,7 @@ def unpickle(file):
   fo.close()
   return dict
 
-def ims(name, img):
+def save_image(name, img):
     # print img[:10][:10]
     scipy.misc.toimage(img, cmin=0, cmax=255).save(name)
 
