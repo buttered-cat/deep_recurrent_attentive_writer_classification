@@ -131,7 +131,7 @@ class Draw():
                 # map from hidden layer -> image portion, and then write it.
                 # self.cs[t] = c_prev + self.write_basic(h_dec)
 
-                # TODO: from here: canvas size vs. write window size
+                # write window will be extrapolated to canvas size
                 if t == 0:
                     # initialize canvas
                     self.canvas.append([c_prev[i] + self.write_attention(h_dec, tf.shape(batch_image_list[i]))])
@@ -149,7 +149,7 @@ class Draw():
         canvas_list = []
         generation_loss_list = []
 
-        # check https://stackoverflow.com/questions/35330117/how-can-i-run-a-loop-with-a-tensor-as-its-range-in-tensorflow
+        # checkout https://stackoverflow.com/questions/35330117/how-can-i-run-a-loop-with-a-tensor-as-its-range-in-tensorflow
         i0 = tf.constant(0)
 
         def while_cond(i, c, l):
@@ -386,8 +386,7 @@ class Draw():
         # base /= 2
 
         # merge the first 64 images to an 8*8 image
-        # TODO: doesn't work on variable size image dataset
-        # TODO: pixel value range?
+        # merge_color() doesn't work on variable size image dataset
         # save_image("results/base.jpg", merge_color(base, [8, 8]))     # 0 <= each pixel <= 1?
 
         saver = tf.train.Saver(max_to_keep=5)
@@ -434,6 +433,8 @@ class Draw():
     #     images = np.array(images).astype(np.float32)
     #     self.images = images  # no need to feed anymore
 
+
+    # TODO: resume/continue training?
 
     def view(self):
         data = glob(os.path.join("./data/train", "*.jpg"))          # TODO: what is that?

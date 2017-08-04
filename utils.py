@@ -15,6 +15,7 @@ def get_image(image_path, desired_type=None):
             return tf.cast(img, tf.float32)
         # [height, width, channels] tensor
 
+
 def transform(image, npx=64, is_crop=True):
     # npx : # of pixels width/height of image
     if is_crop:
@@ -22,6 +23,7 @@ def transform(image, npx=64, is_crop=True):
     else:
         cropped_image = image
     return np.array(cropped_image)/127.5 - 1.
+
 
 def center_crop(x, crop_h, crop_w=None, resize_w=64):
     if crop_w is None:
@@ -33,10 +35,13 @@ def center_crop(x, crop_h, crop_w=None, resize_w=64):
     return scipy.misc.imresize(x[j:j+crop_h, i:i+crop_w],
                                [resize_w, resize_w])
 
+
 def imread(path):
     readimage = scipy.misc.imread(path, mode="RGB").astype(np.float)
     return readimage
 
+
+# TODO: pixel value range?
 def merge_color(images, size):
     h, w = images.shape[1], images.shape[2]
     img = np.zeros((h * size[0], w * size[1], 3))
@@ -48,15 +53,18 @@ def merge_color(images, size):
 
     return img
 
+
 def unpickle(file):
   fo = open(file, 'rb')
   dict = cPickle.load(fo)
   fo.close()
   return dict
 
+
 def save_image(name, img):
     # print img[:10][:10]
     scipy.misc.toimage(img, cmin=0, cmax=255).save(name)
+
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
