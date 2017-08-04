@@ -52,7 +52,7 @@ def unpickle(file):
 
 def ims(name, img):
     # print img[:10][:10]
-    scipy.misc.toimage(img, cmin=0, cmax=1).save(name)
+    scipy.misc.toimage(img, cmin=0, cmax=255).save(name)
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))

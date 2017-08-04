@@ -3,7 +3,6 @@
   <component name="ChangeListManager">
     <list default="true" id="bd391e88-9c37-4f4d-beef-81e1b74fc8b4" name="Default" comment="">
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/DRAW.py" afterPath="$PROJECT_DIR$/DRAW.py" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/utils.py" afterPath="$PROJECT_DIR$/utils.py" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -16,14 +15,22 @@
   <component name="CreatePatchCommitExecutor">
     <option name="PATCH_PATH" value="" />
   </component>
+  <component name="DatabaseView">
+    <option name="GROUP_SCHEMA" value="true" />
+    <option name="GROUP_CONTENTS" value="false" />
+    <option name="SORT_POSITIONED" value="false" />
+    <option name="SHOW_TABLE_DETAILS" value="true" />
+    <option name="SHOW_EMPTY_GROUPS" value="false" />
+    <option name="AUTO_SCROLL_FROM_SOURCE" value="false" />
+  </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="default_target" />
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
       <file leaf-file-name="DRAW.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/DRAW.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="133">
-              <caret line="386" column="11" lean-forward="false" selection-start-line="386" selection-start-column="11" selection-end-line="386" selection-end-column="11" />
+            <state relative-caret-position="247">
+              <caret line="386" column="53" lean-forward="true" selection-start-line="386" selection-start-column="53" selection-end-line="386" selection-end-column="53" />
               <folding>
                 <element signature="e#0#23#0" expanded="true" />
               </folding>
@@ -35,17 +42,7 @@
         <entry file="file://$PROJECT_DIR$/utils.py">
           <provider selected="true" editor-type-id="text-editor">
             <state relative-caret-position="392">
-              <caret line="54" column="21" lean-forward="false" selection-start-line="54" selection-start-column="21" selection-end-line="54" selection-end-column="21" />
-              <folding />
-            </state>
-          </provider>
-        </entry>
-      </file>
-      <file leaf-file-name="gen_image_ops.py" pinned="false" current-in-tab="false">
-        <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/gen_image_ops.py">
-          <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="745">
-              <caret line="310" column="42" lean-forward="true" selection-start-line="310" selection-start-column="42" selection-end-line="310" selection-end-column="42" />
+              <caret line="54" column="38" lean-forward="false" selection-start-line="54" selection-start-column="38" selection-end-line="54" selection-end-column="38" />
               <folding />
             </state>
           </provider>
@@ -54,7 +51,7 @@
       <file leaf-file-name="builtins.py" pinned="false" current-in-tab="false">
         <entry file="file://$USER_HOME$/.PyCharm2016.3/system/python_stubs/-487550511/builtins.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="536">
+            <state relative-caret-position="55708">
               <caret line="2932" column="8" lean-forward="false" selection-start-line="2932" selection-start-column="8" selection-end-line="2932" selection-end-column="8" />
               <folding />
             </state>
@@ -64,7 +61,7 @@
       <file leaf-file-name="pilutil.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/../../../Python/Python35/Lib/site-packages/scipy/misc/pilutil.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-718">
+            <state relative-caret-position="4769">
               <caret line="259" column="35" lean-forward="false" selection-start-line="259" selection-start-column="35" selection-end-line="259" selection-end-column="35" />
               <folding />
             </state>
@@ -112,8 +109,8 @@
       <list>
         <option value="$PROJECT_DIR$/FileReadExample.py" />
         <option value="$PROJECT_DIR$/ops.py" />
-        <option value="$PROJECT_DIR$/utils.py" />
         <option value="$PROJECT_DIR$/DRAW.py" />
+        <option value="$PROJECT_DIR$/utils.py" />
       </list>
     </option>
   </component>
@@ -151,6 +148,7 @@
     <property name="WebServerToolWindowFactoryState" value="false" />
     <property name="js.eslint.eslintPackage" value="" />
     <property name="SearchEverywhereHistoryKey" value="unindent&#9;ACTION&#9;EditorUnindentSelection&#10;decode_jpeg&#9;null&#9;null&#10;decode_image&#9;null&#9;null&#10;replace&#9;ACTION&#9;Replace" />
+    <property name="com.intellij.database.dataSource.DataSourceTemplate" value="MySQL" />
   </component>
   <component name="PyConsoleOptionsProvider">
     <option name="myPythonConsoleState">
@@ -408,7 +406,7 @@
       <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.24962178" sideWeight="0.5" order="1" side_tool="false" content_ui="combo" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3251634" sideWeight="0.5" order="10" side_tool="false" content_ui="tabs" />
       <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3261105" sideWeight="0.5" order="0" side_tool="true" content_ui="tabs" />
-      <window_info id="Database" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
+      <window_info id="Database" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32980332" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Python Console" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32405892" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
@@ -631,7 +629,7 @@
     </entry>
     <entry file="file://$USER_HOME$/.PyCharm2016.3/system/python_stubs/-487550511/builtins.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="536">
+        <state relative-caret-position="55708">
           <caret line="2932" column="8" lean-forward="false" selection-start-line="2932" selection-start-column="8" selection-end-line="2932" selection-end-column="8" />
           <folding />
         </state>
@@ -639,8 +637,16 @@
     </entry>
     <entry file="file://$USER_HOME$/AppData/Roaming/Python/Python35/site-packages/tensorflow/python/ops/gen_image_ops.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="745">
-          <caret line="310" column="42" lean-forward="true" selection-start-line="310" selection-start-column="42" selection-end-line="310" selection-end-column="42" />
+        <state relative-caret-position="5681">
+          <caret line="310" column="42" lean-forward="false" selection-start-line="310" selection-start-column="42" selection-end-line="310" selection-end-column="42" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/../../../Python/Python35/Lib/site-packages/scipy/misc/pilutil.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="4769">
+          <caret line="259" column="35" lean-forward="false" selection-start-line="259" selection-start-column="35" selection-end-line="259" selection-end-column="35" />
           <folding />
         </state>
       </provider>
@@ -648,23 +654,15 @@
     <entry file="file://$PROJECT_DIR$/utils.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="392">
-          <caret line="54" column="21" lean-forward="false" selection-start-line="54" selection-start-column="21" selection-end-line="54" selection-end-column="21" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/../../../Python/Python35/Lib/site-packages/scipy/misc/pilutil.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-718">
-          <caret line="259" column="35" lean-forward="false" selection-start-line="259" selection-start-column="35" selection-end-line="259" selection-end-column="35" />
+          <caret line="54" column="38" lean-forward="false" selection-start-line="54" selection-start-column="38" selection-end-line="54" selection-end-column="38" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/DRAW.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="133">
-          <caret line="386" column="11" lean-forward="false" selection-start-line="386" selection-start-column="11" selection-end-line="386" selection-end-column="11" />
+        <state relative-caret-position="247">
+          <caret line="386" column="53" lean-forward="true" selection-start-line="386" selection-start-column="53" selection-end-line="386" selection-end-column="53" />
           <folding>
             <element signature="e#0#23#0" expanded="true" />
           </folding>
