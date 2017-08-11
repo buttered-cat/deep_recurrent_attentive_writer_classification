@@ -25,8 +25,8 @@ class Draw():
         self.num_channels = 3
 
         self.attention_n = 5
-        self.n_hidden = 256
-        self.n_z = 10       # latent code length
+        self.n_hidden = 512
+        self.n_z = 134       # latent code length
         self.sequence_length = 10
         self.batch_size = 64
         self.share_parameters = False
@@ -46,183 +46,27 @@ class Draw():
         self.lstm_dec = tf.nn.rnn_cell.LSTMCell(self.n_hidden, state_is_tuple=True) # decoder Op
 
         # self.canvas = [0] * self.sequence_length
-        # canvas: list of tensors [batch_size, time, canvas_size]
+        # canvas: list of tensors [batch_size, time, tensor[canvas_size]]
         self.canvas = []
         # self.mu, self.logsigma, self.sigma = [0] * self.sequence_length, [0] * self.sequence_length, [0] * self.sequence_length
         # mu, logsigma, sigma: [(less or equal than) batch_size, self.sequence_length]
         self.mu, self.logsigma, self.sigma = [], [], []
 
-        # h_dec_prev: decoder state of previous time step, list of tensors
-        h_dec_prev = []
-        # h_dec_prev = tf.zeros((self.batch_size, self.n_hidden))
-
-        enc_state = self.lstm_enc.zero_state(tf.shape(self.images)[0], tf.float32)
-        dec_state = self.lstm_dec.zero_state(tf.shape(self.images)[0], tf.float32)
-
-        # flatten w.r.t #images
-        enc_state = tf.unstack(enc_state)
-        dec_state = tf.unstack(dec_state)
 
         # x = tf.reshape(self.images, [-1, self.img_size*self.img_size*self.num_colors])
         # x = self.images     # [batch, height, width, channel]
         self.attn_params = []
         # self.generated_images = []
         self.generation_loss = []
-        for t in range(self.sequence_length):
-            # generate one computation graph for each image? No, euivalent to batch_size = 1. see start of class def
-            # batch_image_list = tf.unstack(self.images)
-            batch_image_list = self.images
-            # c_prev: with shape [batch_size, time], each element is a tensor of an image canvas
-            c_prev = []
-            # x_hat: list of tensors
-            x_hat = []
-            # r: list of tensors
-            r = []
-            # z: list of tensors
-            z = []
-
-            # below defines computation graph
-            i0 = tf.constant(0)
-
-            # for i in range(tf.shape(self.images)[0]):
-            def while_cond(i):      # for all images in a batch
-                return i < tf.shape(self.images)[0]
-
-            def while_body(i):
-                # for each image:
-                # error image + original image
-                batch_image_list_shape = tf.shape(batch_image_list[i])
-
-                # TODO: either use variable node or create a data-dependent graph.
-                x_hat.append(batch_image_list[i] - tf.sigmoid(c_prev[i]))
-                # read the image
-                # r = self.read_basic(x,x_hat,h_dec_prev)
-                r.append(self.read_attention(batch_image_list[i], x_hat[i], h_dec_prev[i]))     # [self.attention_n, 2 * self.attention_n]
-                # encode it to gauss distrib
-
-                new_mu, new_logsigma, new_sigma, new_enc_state = self.encode(enc_state,
-                                                                             tf.concat(1, [r[i], h_dec_prev[i]]))
-                # mu and sigma: [self.n_z] latent code length
-
-                if t == 0:
-                    # initialize canvas history
-                    # [(less or equal than)batch_size, self.sequence_length]
-                    c_prev.append([tf.zeros((batch_image_list_shape[0] * batch_image_list_shape[1]))])
-
-                    # initialize gaussian latent dist history
-                    self.mu.append([new_mu])
-                    self.logsigma.append([new_logsigma])
-                    self.sigma.append([new_sigma])
-                else:
-                    # t-th time step of image #i
-                    self.mu[i].append(new_mu)
-                    self.logsigma[i].append(new_logsigma)
-                    self.sigma[i].append(new_sigma)
-
-                    c_prev[i].append(self.canvas[i][t - 1])
-
-                # self.mu[i][t], self.logsigma[i][t], self.sigma[i][t], new_enc_state = self.encode(enc_state, tf.concat(1, [r[i], h_dec_prev[i]]))
-                enc_state[i].assign(new_enc_state)      # per image
-
-                # sample from the distrib to get z
-                # TODO: further research, dont' quite understand
-                z[i] = self.sampleQ(self.mu[t][i], self.sigma[t][i])        # [self.n_z]: latent variable
-                # retrieve the hidden layer of RNN
-                h_dec, new_dec_state = self.decode_layer(dec_state[i], z[i])
-                dec_state[i].assign(new_dec_state)
-                # map from hidden layer -> image portion, and then write it.
-                # self.cs[t] = c_prev + self.write_basic(h_dec)
-
-                # write window will be extrapolated to canvas size
-                if t == 0:
-                    # initialize canvas
-                    self.canvas.append([c_prev[i] + self.write_attention(h_dec, tf.shape(batch_image_list[i]))])
-
-                    # initialize previous decoder state
-                    h_dec_prev.append(h_dec)
-                else:
-                    self.canvas[i].append(c_prev[i] + self.write_attention(h_dec, tf.shape(batch_image_list[i])))
-                    h_dec_prev[i] = h_dec
-
-                self.share_parameters = True  # share variables after the first loop
-                return [i+1]
-
-            tf.while_loop(while_cond, while_body, loop_vars=[i0])
-
-        canvas_list = []
-        generation_loss_list = []
-
-        # checkout https://stackoverflow.com/questions/35330117/how-can-i-run-a-loop-with-a-tensor-as-its-range-in-tensorflow
-        i0 = tf.constant(0)
-
-        def while_cond(i, c, l):
-            return i < tf.shape(self.canvas)[0]      # for all images in a batch
-
-        def while_body(i, c, l):
-            c.append(self.canvas[i][-1])     # final canvas per image
-
-            # TODO: better measure
-            l.append(tf.nn.l2_loss(self.images[i] - self.canvas[i][-1]))    # error image per image
-            return [i + 1, c, l]
-
-        # canvas_list, generation_loss_list = tf.while_loop(while_cond, while_body, loop_vars=[canvas_list, generation_loss_list])
-        tf.while_loop(while_cond, while_body, loop_vars=[i0, canvas_list, generation_loss_list])
-
-        # for i in range(tf.shape(self.canvas)[0]):
-        #     canvas_list.append(self.canvas[i][-1])     # final canvas per image
-        #     generation_loss_list.append(tf.nn.l2_loss(self.images[i] - self.canvas[i][-1]))    # error image per image
-
-        # the final timestep
-        # TODO: why sigmoid?
-        # canvas shape: [batch, height, width, channel]
-        # self.generated_images = tf.nn.sigmoid(np.array([c[-1] for c in self.canvas]))
-        self.generated_images = tf.nn.sigmoid(canvas_list)
-
-        # log likelihood of binary image
-        # self.generation_loss = tf.reduce_mean(-tf.reduce_sum(self.images * tf.log(1e-10 + self.generated_images) + (1-self.images) * tf.log(1e-10 + 1 - self.generated_images), 1))
-        # TODO: mean or sum?
-        self.generation_loss = tf.reduce_sum(tf.stack(generation_loss_list))
-
-        kl_terms = [0]*self.sequence_length
-        for t in range(self.sequence_length):
-
-            def while_cond(i, mu_list, sigma_list, logsigma_list, kl_terms_list):
-                return i < tf.shape(mu_list)[0]
-
-            def while_body(i, mu_list, sigma_list, logsigma_list, kl_terms_list):
-                mu2 = tf.square(mu_list[i][t])
-                sigma2 = tf.square(sigma_list[i][t])
-                logsigma = logsigma_list[i][t]
-                kl_terms_list.append(0.5 * tf.reduce_sum(mu2 + sigma2 - 2*logsigma, 1) - self.sequence_length*0.5)
-
-                return [i + 1, mu_list, sigma_list, logsigma_list, kl_terms_list]
-
-            i0 = tf.constant(0)
-            _, _, _, _, kl_terms_list = tf.while_loop(while_cond, while_body, loop_vars=[i0, self.mu, self.sigma, self.logsigma, []])
-
-            kl_terms_batch_vector = tf.stack(kl_terms_list)     # [batch_size]
-            kl_terms[t] = kl_terms_batch_vector     # [batch_size]
-
-        self.latent_loss = tf.reduce_mean(tf.add_n(kl_terms))
-        self.cost = self.generation_loss + self.latent_loss
-        optimizer = tf.train.AdamOptimizer(1e-3, beta1=0.5)
-        grads = optimizer.compute_gradients(self.cost)
-
-        # clip gradients
-        for i, (g, v) in enumerate(grads):
-            if g is not None:
-                grads[i] = (tf.clip_by_norm(g, 5), v)
-        self.train_op = optimizer.apply_gradients(grads)
 
         self.sess = tf.Session()
-        self.sess.run(tf.initialize_all_variables())
 
     # given a hidden decoder layer:
     # locate where to put attention filters
     # TODO: maybe variable window aspect ratio?
     def attn_window(self, scope, h_dec, img_shape):
         # with tf.variable_scope(scope, reuse=self.share_parameters):
-        parameters = dense(h_dec, self.n_hidden, 5, scope=scope, reuse_params=self.share_parameters)     # [batch, 5]
+        parameters = dense(h_dec, self.n_hidden, 5, scope_name=scope)     # [batch, 5]
         # gx_, gy_: center of 2d gaussian on a scale of -1 to 1
         gx_, gy_, log_sigma2, log_delta, log_gamma = tf.split(1, 5, parameters)   # each: [1(batch), 1]
 
@@ -328,9 +172,9 @@ class Draw():
         # map the RNN hidden state to latent variables
         # potential bug? dense() modifies scope if not provided
         # with tf.variable_scope("mu", reuse=self.share_parameters):
-        mu = dense(hidden_layer, self.n_hidden, self.n_z, scope="mu", reuse_params=self.share_parameters)   # [self.n_z]
+        mu = dense(hidden_layer, self.n_hidden, self.n_z, scope_name="mu")   # [self.n_z]
         # with tf.variable_scope("sigma", reuse=self.share_parameters):
-        logsigma = dense(hidden_layer, self.n_hidden, self.n_z, scope="sigma", reuse_params=self.share_parameters)
+        logsigma = dense(hidden_layer, self.n_hidden, self.n_z, scope_name="sigma")
         with tf.variable_scope("sigma", reuse=self.share_parameters):
             sigma = tf.exp(logsigma)
         return mu, logsigma, sigma, next_state
@@ -351,15 +195,14 @@ class Draw():
         # with tf.variable_scope("write", reuse=self.share_parameters):
         decoded_image_portion = dense(hidden_layer,
                                       self.n_hidden, self.img_size * self.img_size * self.num_channels,
-                                      scope="write",
-                                      reuse_params=self.share_parameters)
+                                      scope_name="write")
         # decoded_image_portion = tf.reshape(decoded_image_portion, [-1, self.img_size, self.img_size, self.num_colors])
         return decoded_image_portion
 
     def write_attention(self, hidden_layer, img_size):
         # with tf.variable_scope("write_attention", reuse=self.share_parameters):
         w = dense(hidden_layer, self.n_hidden, self.attention_n * self.attention_n * self.num_channels,
-                  scope="write_attention", reuse_params=self.share_parameters)
+                  scope_name="write_attention")
 
         w = tf.reshape(w, [self.attention_n, self.attention_n, self.num_channels])
         w_t = tf.transpose(w, perm=[2, 0, 1])
@@ -392,34 +235,218 @@ class Draw():
         # merge_color() doesn't work on variable size image dataset
         # save_image("results/base.jpg", merge_color(base, [8, 8]))     # 0 <= each pixel <= 1?
 
-        saver = tf.train.Saver(max_to_keep=5)
-
         data_len = len(data)
-        num_batch = data_len / self.batch_size + (1 if data_len % self.batch_size is not 0 else 0)
+        num_batch = data_len // self.batch_size + (1 if data_len % self.batch_size != 0 else 0)
+        # print(data_len // self.batch_size)
+
+        variables_not_initialized = True
+
         for e in range(10):
             # epoch
             # why skipping 2 batches?
             # for i in range((len(data) / self.batch_size) - 2):
-            for i in range(num_batch):
+            for batch_id in range(num_batch):
                 # i: batch number
-                batch_upper_bound = (i+1)*self.batch_size if i != data_len / self.batch_size + 1 else data_len
-                batch_files = data[i*self.batch_size: batch_upper_bound]
-                batch = [get_image(batch_file) for batch_file in batch_files]   # [batch, tensor[height, width, channels]]
-                batch = tf.stack(batch)        # [batch, height, width, channels]
+                batch_upper_bound = (batch_id+1)*self.batch_size if batch_id != data_len / self.batch_size + 1 else data_len
+                batch_files = data[batch_id*self.batch_size: batch_upper_bound]
+                # [batch, tensor[height, width, channels]]
+                batch = [get_image(batch_file, desired_type=tf.float32) for batch_file in batch_files]
+                # batch = tf.stack(batch)        # [batch, height, width, channels]
 
                 # batch_images = np.array(batch).astype(np.float32)
                 # batch_images += 1
                 # batch_images /= 2
                 # self.images = batch_images      # no need to feed anymore
 
-                cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([self.canvas, self.attn_params, self.generation_loss, self.latent_loss, self.train_op], feed_dict={self.images: batch})
-                print("epoch %d iter %d genloss %f latloss %f" % (e, i, gen_loss, lat_loss))
+
+
+
+
+
+
+
+
+                # flatten w.r.t #images
+                # enc_state = tf.unstack(enc_state)
+                # dec_state = tf.unstack(dec_state)
+
+                batch_images = batch
+
+                enc_state = [self.lstm_enc.zero_state(1, tf.float32)] * len(batch_images)
+                dec_state = [self.lstm_enc.zero_state(1, tf.float32)] * len(batch_images)
+
+                # h_dec_prev: decoder state of previous time step, list of tensors
+                # initialize previous decoder state
+                # TODO: redundancy?
+                h_dec_prev = [tf.zeros((self.n_hidden))] * len(batch_images)
+
+                # computation graph construction
+                for t in range(self.sequence_length):
+                    # generate one computation graph for each image? No, equivalent to batch_size = 1. see start of class def
+                    # batch_images = tf.unstack(self.images)
+                    # c_prev: list with shape [batch_size], each element is a tensor of an image canvas
+                    c_prev = []
+                    # x_hat: list of tensors
+                    x_hat = []
+                    # r: list of tensors
+                    r = []
+                    # z: list of tensors
+                    z = []
+
+                    # below defines computation graph
+                    i0 = tf.constant(0)
+
+                    for i in range(len(batch_images)):
+                    # def while_body(i):
+                        # for each image:
+                        # error image + original image
+                        batch_image_shape = tf.shape(batch_images[i])
+
+                        if t == 0:
+                            # initialize canvas history
+                            # list of tensor with size[(less or equal than)batch_size],
+                            # with size of each element identical to current image
+                            c_prev.append(tf.zeros([batch_image_shape[0], batch_image_shape[1], batch_image_shape[2]]))
+
+                        else:
+                            c_prev[i].append(self.canvas[i][t - 1])
+
+                        # TODO: no sigmoid? cuz that suppresses gradient
+                        # x_hat.append(batch_images[i] - tf.sigmoid(c_prev[i]))
+                        x_hat.append(batch_images[i] - c_prev[i])
+                        # read the image
+                        # r = self.read_basic(x,x_hat,h_dec_prev)
+                        r.append(self.read_attention(batch_images[i], x_hat[i], dec_state[i]))  # [self.attention_n, 2 * self.attention_n]
+                        # encode it to gauss distrib
+
+                        new_mu, new_logsigma, new_sigma, new_enc_state = self.encode(enc_state[i], tf.concat(1, [r[i], dec_state[i]]))
+                        # mu and sigma: [self.n_z] latent code length
+
+                        if t == 0:
+                            # initialize gaussian latent dist history
+                            self.mu.append([new_mu])
+                            self.logsigma.append([new_logsigma])
+                            self.sigma.append([new_sigma])
+                        else:
+                            # t-th time step of image #i
+                            self.mu[i].append(new_mu)
+                            self.logsigma[i].append(new_logsigma)
+                            self.sigma[i].append(new_sigma)
+
+                        # self.mu[i][t], self.logsigma[i][t], self.sigma[i][t], new_enc_state = self.encode(enc_state, tf.concat(1, [r[i], h_dec_prev[i]]))
+                        enc_state[i].assign(new_enc_state)  # per image
+
+                        # sample from the distrib to get z
+                        # TODO: further research, dont' quite understand
+                        z[i] = self.sampleQ(self.mu[t][i], self.sigma[t][i])  # [self.n_z]: latent variable
+                        # retrieve the hidden layer of RNN
+                        h_dec, new_dec_state = self.decode_layer(dec_state[i], z[i])
+                        dec_state[i].assign(new_dec_state)
+                        # map from hidden layer -> image portion, and then write it.
+                        # self.cs[t] = c_prev + self.write_basic(h_dec)
+
+                        # write window will be extrapolated to canvas size
+                        if t == 0:
+                            # initialize canvas
+                            self.canvas.append([c_prev[i] + self.write_attention(h_dec, tf.shape(batch_images[i]))])
+
+                        else:
+                            self.canvas[i].append(c_prev[i] + self.write_attention(h_dec, tf.shape(batch_images[i])))
+
+                        # h_dec_prev[i] = h_dec
+
+                        # self.share_parameters = True  # share variables after the first loop
+                        # return [i + 1]
+
+                    # tf.while_loop(while_cond, while_body, loop_vars=[i0])
+
+                canvas_list = []
+                generation_loss_list = []
+                kl_terms_list = []
+
+                # checkout https://stackoverflow.com/questions/35330117/how-can-i-run-a-loop-with-a-tensor-as-its-range-in-tensorflow
+                i0 = tf.constant(0)
+
+                # def while_cond(i, c, l):
+                #     return i < tf.shape(self.canvas)[0]  # for all images in a batch
+
+                # def while_body(i, c, l):
+                for canvas_index in range(len(self.canvas)):
+                    canvas_list.append(self.canvas[canvas_index][-1])  # final canvas per image
+
+                    # TODO: better measure
+                    generation_loss_list.append(tf.nn.l2_loss(batch_images[canvas_index] - self.canvas[canvas_index][-1]))  # error image per image
+                    # return [i + 1, c, l]
+
+                # canvas_list, generation_loss_list = tf.while_loop(while_cond, while_body, loop_vars=[canvas_list, generation_loss_list])
+                # tf.while_loop(while_cond, while_body, loop_vars=[i0, canvas_list, generation_loss_list])
+
+                # for i in range(tf.shape(self.canvas)[0]):
+                #     canvas_list.append(self.canvas[i][-1])     # final canvas per image
+                #     generation_loss_list.append(tf.nn.l2_loss(self.images[i] - self.canvas[i][-1]))    # error image per image
+
+                # the final timestep
+                # TODO: why sigmoid?
+                # canvas shape: [batch, height, width, channel]
+                # self.generated_images = tf.nn.sigmoid(np.array([c[-1] for c in self.canvas]))
+                self.generated_images = tf.nn.sigmoid(canvas_list)
+
+                # log likelihood of binary image
+                # self.generation_loss = tf.reduce_mean(-tf.reduce_sum(self.images * tf.log(1e-10 + self.generated_images) + (1-self.images) * tf.log(1e-10 + 1 - self.generated_images), 1))
+                # TODO: mean or sum?
+                self.generation_loss = tf.reduce_sum(tf.stack(generation_loss_list))
+
+                kl_terms = [0] * self.sequence_length
+                for t in range(self.sequence_length):
+                    # def while_cond(i, mu_list, sigma_list, logsigma_list, kl_terms_list):
+                    #     return i < tf.shape(mu_list)[0]
+
+                    # def while_body(i, mu_list, sigma_list, logsigma_list, kl_terms_list):
+                    for i in range(len(self.mu)):
+                        mu2 = tf.square(self.mu[i][t])
+                        sigma2 = tf.square(self.sigma[i][t])
+                        logsigma = self.logsigma[i][t]
+                        kl_terms_list.append(
+                            0.5 * tf.reduce_sum(mu2 + sigma2 - 2 * logsigma, 1) - self.sequence_length * 0.5)
+
+                        # return [i + 1, mu_list, sigma_list, logsigma_list, kl_terms_list]
+
+                    # i0 = tf.constant(0)
+                    # _, _, _, _, kl_terms_list = tf.while_loop(while_cond, while_body,
+                    #                                           loop_vars=[i0, self.mu, self.sigma, self.logsigma, []])
+
+                    kl_terms_batch_vector = tf.stack(kl_terms_list)  # [batch_size]
+                    kl_terms[t] = kl_terms_batch_vector  # [batch_size]
+
+                self.latent_loss = tf.reduce_mean(tf.add_n(kl_terms))
+                self.cost = self.generation_loss + self.latent_loss
+                optimizer = tf.train.AdamOptimizer(1e-3, beta1=0.5)
+                grads = optimizer.compute_gradients(self.cost)
+
+                # clip gradients
+                for i, (g, v) in enumerate(grads):
+                    if g is not None:
+                        grads[i] = (tf.clip_by_norm(g, 5), v)
+                self.train_op = optimizer.apply_gradients(grads)
+
+                if variables_not_initialized:
+                    self.sess.run(tf.global_variables_initializer())
+                    saver = tf.train.Saver(max_to_keep=5)
+                    variables_not_initialized = False
+
+
+
+
+
+
+                cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([self.canvas, self.attn_params, self.generation_loss, self.latent_loss, self.train_op])
+                print("epoch %d iter %d genloss %f latloss %f" % (e, batch_id, gen_loss, lat_loss))
                 # print(attn_params[0].shape)
                 # print(attn_params[1].shape)
                 # print(attn_params[2].shape)
-                if i % 800 == 0:
+                if batch_id % 800 == 0:
 
-                    saver.save(self.sess, os.getcwd() + "/model", global_step=e*10000 + i)
+                    saver.save(self.sess, os.getcwd() + "/model", global_step=e*10000 + batch_id)
 
                     # cs = 1.0/(1.0+np.exp(-np.array(cs)))    # x_recons=sigmoid(canvas)
 
@@ -427,7 +454,7 @@ class Draw():
                         img = cs[cs_iter][-1]
                         # results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_channels])
                         # print(results_square.shape)
-                        save_image("results/" + str(e) + "-" + str(i) + "-#" + str(cs_iter) + ".jpg", img)
+                        save_image("results/" + str(e) + "-" + str(batch_id) + "-#" + str(cs_iter) + ".jpg", img)
 
 
     # def load_images(self, path, pattern):
@@ -441,7 +468,7 @@ class Draw():
 
     def view(self):
         data = glob(os.path.join("./data/train", "*.jpg"))          # TODO: what is that?
-        base = np.array([get_image(sample_file) for sample_file in data[0:64]])
+        base = np.array([get_image(sample_file, desired_type=tf.float32) for sample_file in data[0:64]])
         base += 1
         base /= 2
         # self.images = base
@@ -451,7 +478,7 @@ class Draw():
         saver = tf.train.Saver(max_to_keep=2)
         saver.restore(self.sess, tf.train.latest_checkpoint(os.getcwd()+"/training/"))
 
-        cs, attn_params, gen_loss, lat_loss = self.sess.run([self.canvas, self.attn_params, self.generation_loss, self.latent_loss], feed_dict={self.images: base})
+        cs, attn_params, gen_loss, lat_loss = self.sess.run([self.canvas, self.attn_params, self.generation_loss, self.latent_loss])
         print("genloss %f latloss %f" % (gen_loss, lat_loss))
 
         cs = 1.0/(1.0+np.exp(-np.array(cs))) # x_recons=sigmoid(canvas)

@@ -64,22 +64,28 @@ def lrelu(x, leak=0.2, name="lrelu"):
 
 
 # fully-conected layer
-def dense(x, inputFeatures, outputFeatures, scope=None, reuse_params=None, with_w=False):
-    with tf.variable_scope(scope or "Linear",
-                           reuse=reuse_params if reuse_params is True else None):
-        matrix = tf.get_variable("Matrix", [inputFeatures, outputFeatures], tf.float32, tf.random_normal_initializer(stddev=0.02))
-        bias = tf.get_variable("bias", [outputFeatures], initializer=tf.constant_initializer(0.0))
-        if with_w:
-            return tf.matmul(x, matrix) + bias, matrix, bias
-        else:
-            return tf.matmul(x, matrix) + bias      # [outputFeatures]
+def dense(x, inputFeatures, outputFeatures, scope_name):
+    # with tf.variable_scope(scope):
+            # ,reuse=reuse_params if reuse_params is True else None):
+    matrix = get_scope_variable(scope_name,
+                                "Matrix",
+                                shape=[inputFeatures, outputFeatures],
+                                type=tf.float32,
+                                initializer=tf.random_normal_initializer(stddev=0.02))
+    bias = get_scope_variable(scope_name,
+                              "bias",
+                              shape=[outputFeatures],
+                              type=tf.float32,
+                              initializer=tf.constant_initializer(0.0))
+
+    return tf.matmul(x, matrix) + bias      # [outputFeatures]
 
 
 # https://stackoverflow.com/questions/38545362/tensorflow-variable-scope-reuse-if-variable-exists
-def get_scope_variable(scope_name, var, shape=None):
+def get_scope_variable(scope_name, var, shape=None, type=None, initializer=None):
     with tf.variable_scope(scope_name) as scope:
         try:
-            v = tf.get_variable(var, shape)
+            v = tf.get_variable(var, shape, dtype=type, initializer=initializer)
         except ValueError:
             scope.reuse_variables()
             v = tf.get_variable(var)
