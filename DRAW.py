@@ -93,6 +93,7 @@ class Draw():
                 # error image + original image
                 batch_image_list_shape = tf.shape(batch_image_list[i])
 
+                # TODO: either use variable node or create a data-dependent graph.
                 x_hat.append(batch_image_list[i] - tf.sigmoid(c_prev[i]))
                 # read the image
                 # r = self.read_basic(x,x_hat,h_dec_prev)

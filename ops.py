@@ -75,6 +75,18 @@ def dense(x, inputFeatures, outputFeatures, scope=None, reuse_params=None, with_
             return tf.matmul(x, matrix) + bias      # [outputFeatures]
 
 
+# https://stackoverflow.com/questions/38545362/tensorflow-variable-scope-reuse-if-variable-exists
+def get_scope_variable(scope_name, var, shape=None):
+    with tf.variable_scope(scope_name) as scope:
+        try:
+            v = tf.get_variable(var, shape)
+        except ValueError:
+            scope.reuse_variables()
+            v = tf.get_variable(var)
+
+        return v
+
+
 def merge(images, size):
     h, w = images.shape[1], images.shape[2]
     img = np.zeros((h * size[0], w * size[1]))
