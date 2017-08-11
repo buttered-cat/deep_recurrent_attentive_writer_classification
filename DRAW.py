@@ -39,7 +39,7 @@ class Draw():
         # self.load_images("./data/train", "*.jpg")
 
         # Qsampler noise
-        self.e = [tf.random_normal(self.n_z, mean=0, stddev=1) for i in range(self.batch_size)]    # [self.batch_size]
+        self.e = [tf.random_normal([self.n_z], mean=0, stddev=1) for i in range(self.batch_size)]    # [self.batch_size]
 
         # What kinda structure? A cell IS A CELL, with vectors as input/output
         self.lstm_enc = tf.nn.rnn_cell.LSTMCell(self.n_hidden, state_is_tuple=True) # encoder Op
@@ -70,7 +70,8 @@ class Draw():
         self.generation_loss = []
         for t in range(self.sequence_length):
             # generate one computation graph for each image? No, euivalent to batch_size = 1. see start of class def
-            batch_image_list = tf.unstack(self.images)
+            # batch_image_list = tf.unstack(self.images)
+            batch_image_list = self.images
             # c_prev: with shape [batch_size, time], each element is a tensor of an image canvas
             c_prev = []
             # x_hat: list of tensors
@@ -143,6 +144,7 @@ class Draw():
                     h_dec_prev[i] = h_dec
 
                 self.share_parameters = True  # share variables after the first loop
+                return [i+1]
 
             tf.while_loop(while_cond, while_body, loop_vars=[i0])
 
@@ -468,7 +470,7 @@ class Draw():
                 center_y = int(attn_params[cs_iter][1][i][0])
                 distance = int(attn_params[cs_iter][2][i][0])
 
-                size = 2;
+                size = 2
 
                 # for x in range(3):
                 #     for y in range(3):
@@ -497,5 +499,5 @@ class Draw():
 
 
 model = Draw()
-# model.train()
-model.view()
+model.train()
+# model.view()
