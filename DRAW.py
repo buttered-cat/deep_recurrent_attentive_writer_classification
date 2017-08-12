@@ -26,7 +26,7 @@ class Draw():
         self.img_size = 64
         self.num_channels = 3
 
-        self.attention_n = 5
+        self.attention_n = 100
         self.n_hidden = 512
         self.n_z = 134       # latent code length
         self.sequence_length = 10
@@ -71,25 +71,25 @@ class Draw():
         # with tf.variable_scope(scope, reuse=self.share_parameters):
         parameters = dense(h_dec, self.n_hidden, 5, scope_name=scope)     # [batch, 5]
         # gx_, gy_: center of 2d gaussian on a scale of -1 to 1
-        gx_, gy_, log_sigma2, log_delta, log_gamma = tf.split(1, 5, parameters)   # each: [1(batch), 1]
+        gx_, gy_, log_sigma2, log_delta, log_gamma = tf.split(parameters, 5, axis=1)   # each: [1(batch), 1]
 
-        gx_ = tf.reshape(gx_, 1)
-        gy_ = tf.reshape(gy_, 1)
-        log_sigma2 = tf.reshape(log_sigma2, 1)
-        log_delta = tf.reshape(log_delta, 1)
-        log_gamma = tf.reshape(log_gamma, 1)
+        gx_ = tf.reshape(gx_, [1])
+        gy_ = tf.reshape(gy_, [1])
+        log_sigma2 = tf.reshape(log_sigma2, [1])
+        log_delta = tf.reshape(log_delta, [1])
+        log_gamma = tf.reshape(log_gamma, [1])
 
         # move gx/gy to be a scale of -imgsize to +imgsize (?)
         # dense() doesn't seem to guarantee positiveness, but that's not a problem. See paper
         # "The scaling...is chosen to ensure that the initial patch...roughly covers the whole image."
-        gx = (img_shape[1]+1)/2 * (gx_ + 1)
-        gy = (img_shape[0]+1)/2 * (gy_ + 1)
+        gx = tf.cast((img_shape[1]+1)/2, tf.float32) * (gx_ + 1)
+        gy = tf.cast((img_shape[0]+1)/2, tf.float32) * (gy_ + 1)
 
         sigma2 = tf.exp(log_sigma2)
         # stride/delta: how far apart these patches will be
         # typo?
         # delta = (self.img_size - 1) / ((self.attention_n-1) * tf.exp(log_delta))
-        delta = (tf.maximum(img_shape[0], img_shape[1]) - 1) / (self.attention_n-1) * tf.exp(log_delta)
+        delta = tf.cast((tf.maximum(img_shape[0], img_shape[1]) - 1) / (self.attention_n-1), tf.float32) * tf.exp(log_delta)
         # returns [Fx, Fy, gamma]
 
         gamma = tf.exp(log_gamma)
@@ -116,14 +116,14 @@ class Draw():
         Fx = tf.exp(-tf.square((im_x - mu_x) / (2*sigma2)))     # [self.attention_n, img_size[1]]
         Fy = tf.exp(-tf.square((im_y - mu_y) / (2*sigma2)))
         # normalize so area-under-curve = 1
-        Fx = Fx / tf.maximum(tf.reduce_sum(Fx, 2, keep_dims=True), 1e-8)
-        Fy = Fy / tf.maximum(tf.reduce_sum(Fy, 2, keep_dims=True), 1e-8)
+        Fx = Fx / tf.maximum(tf.reduce_sum(Fx, 1, keep_dims=True), 1e-8)
+        Fy = Fy / tf.maximum(tf.reduce_sum(Fy, 1, keep_dims=True), 1e-8)
         return Fx, Fy       # [self.attention_n, img_size[1 | 0]]
 
 
     # the read() operation without attention
     def read_basic(self, x, x_hat, h_dec_prev):
-        return tf.concat(1,[x,x_hat])
+        return tf.concat([x, x_hat], 1)
 
     def read_attention(self, x, x_hat, h_dec_prev):
         # per image
@@ -139,12 +139,12 @@ class Draw():
 
             # img = tf.reshape(img, [-1, self.img_size, self.img_size, self.num_channels])    # batch * height * width * channel
             # img_t = tf.transpose(img, perm=[3,0,1,2])   # channel * batch * height * width
-            img_t = tf.transpose(img, perm=[3, 0, 1])   # [channel, height, width]
+            img_t = tf.transpose(img, perm=[2, 0, 1])   # [channel, height, width]
 
             # batch_colors_array = tf.reshape(img_t, [self.num_channels * self.batch_size, self.img_size, self.img_size])
             batch_colors_array = img_t
-            Fx_array = tf.concat(0, [Fx, Fx, Fx])       # 3 channels
-            Fy_array = tf.concat(0, [Fy, Fy, Fy])
+            Fx_array = tf.stack([Fx, Fx, Fx])       # 3 channels
+            Fy_array = tf.stack([Fy, Fy, Fy])
 
             Fxt = tf.transpose(Fx_array, perm=[0, 2, 1])      # transpose per image
 
@@ -157,11 +157,14 @@ class Draw():
             # reshape: iterate through two tensors simultaneously, and fill the elements
             # glimpse = tf.reshape(glimpse, [self.batch_size, self.attention_n * self.attention_n * self.num_channels])
             glimpse = tf.reshape(glimpse, [1, -1])      # [1, height * width * channel]
+            # print(self.sess.run(tf.shape(glimpse)))
             # finally scale this glimpse with the gamma parameter
             return glimpse * tf.reshape(gamma, [-1, 1])
-        x = filter_img(x, Fx, Fy, gamma)            # [self.attention_n, self.attention_n]
+        x = filter_img(x, Fx, Fy, gamma)            # [1, self.attention_n * self.attention_n * channels]
         x_hat = filter_img(x_hat, Fx, Fy, gamma)
-        return tf.concat(1, [x, x_hat])        # [self.attention_n, 2 * self.attention_n]
+        # print(self.sess.run(tf.shape(x)))
+        # print(self.sess.run(tf.shape(x_hat)))
+        return tf.concat([x, x_hat], 1)        # [1, 2 * self.attention_n * self.attention_n * channels]
 
     # encode an attention patch
     def encode(self, prev_state, image):
@@ -170,17 +173,21 @@ class Draw():
             # see https://www.quora.com/What-is-the-meaning-of-%E2%80%9CThe-number-of-units-in-the-LSTM-cell
             # and https://stackoverflow.com/questions/36732877/about-lstm-cell-state-size
             # feeds a fixed size attention window
-            hidden_layer, next_state = self.lstm_enc(image, prev_state)     # each: self.n_hidden?
+            # TODO: which to use?
+            # print(self.sess.run(tf.shape(image)))
+            # print(self.sess.run(tf.shape(prev_state)))
+            new_state = self.lstm_enc(image, prev_state)     # tuple of [1(batch), self.n_hidden]
+            # hidden_layer, next_state = self.lstm_enc(image, prev_state)     # each: self.n_hidden?
 
         # map the RNN hidden state to latent variables
         # potential bug? dense() modifies scope if not provided
         # with tf.variable_scope("mu", reuse=self.share_parameters):
-        mu = dense(hidden_layer, self.n_hidden, self.n_z, scope_name="mu")   # [self.n_z]
+        mu = dense(new_state[0], self.n_hidden, self.n_z, scope_name="mu")   # [self.n_z]
         # with tf.variable_scope("sigma", reuse=self.share_parameters):
-        logsigma = dense(hidden_layer, self.n_hidden, self.n_z, scope_name="sigma")
+        logsigma = dense(new_state[0], self.n_hidden, self.n_z, scope_name="sigma")
         with tf.variable_scope("sigma", reuse=self.share_parameters):
             sigma = tf.exp(logsigma)
-        return mu, logsigma, sigma, next_state
+        return mu, logsigma, sigma, new_state
 
 
     def sampleQ(self, mu, sigma):
@@ -189,9 +196,9 @@ class Draw():
     def decode_layer(self, prev_state, latent):
         # update decoder RNN with latent var
         with tf.variable_scope("decoder", reuse=self.share_parameters):
-            hidden_layer, next_state = self.lstm_dec(latent, prev_state)
+            new_state = self.lstm_dec(latent, prev_state)
 
-        return hidden_layer, next_state
+        return new_state
 
     def write_basic(self, hidden_layer):
         # map RNN hidden state to image
@@ -214,8 +221,8 @@ class Draw():
         # color1, color2, color3, color1, color2, color3, etc.
         # w_array = tf.reshape(w_t, [self.num_channels * self.batch_size, self.attention_n, self.attention_n])
         w_array = w_t       # [self.num_channels, self.attention_n, self.attention_n]
-        Fx_array = tf.concat(0, [Fx, Fx, Fx])
-        Fy_array = tf.concat(0, [Fy, Fy, Fy])
+        Fx_array = tf.stack([Fx, Fx, Fx])
+        Fy_array = tf.stack([Fy, Fy, Fy])
 
         Fyt = tf.transpose(Fy_array, perm=[0, 2, 1])
         # [vert, attn_n] * [attn_n, attn_n] * [attn_n, horiz]
@@ -296,12 +303,14 @@ class Draw():
 
                 batch_images = batch
 
+                # have to use the whole tuple because of state_is_tuple limitaion
+                # m_state
                 enc_state = [self.lstm_enc.zero_state(1, tf.float32)] * len(batch_images)
                 dec_state = [self.lstm_enc.zero_state(1, tf.float32)] * len(batch_images)
+                # print(self.sess.run(tf.shape(dec_state[0])))
 
                 # h_dec_prev: decoder state of previous time step, list of tensors
                 # initialize previous decoder state
-                # TODO: redundancy?
                 h_dec_prev = [tf.zeros((self.n_hidden))] * len(batch_images)
 
                 # computation graph construction
@@ -340,10 +349,12 @@ class Draw():
                         x_hat.append(batch_images[i] - c_prev[i])
                         # read the image
                         # r = self.read_basic(x,x_hat,h_dec_prev)
-                        r.append(self.read_attention(batch_images[i], x_hat[i], dec_state[i]))  # [self.attention_n, 2 * self.attention_n]
+                        # [1, 2 * self.attention_n * self.attention_n * channels]
+                        r.append(self.read_attention(batch_images[i], x_hat[i], dec_state[i][0]))   # use cell state
                         # encode it to gauss distrib
 
-                        new_mu, new_logsigma, new_sigma, new_enc_state = self.encode(enc_state[i], tf.concat(1, [r[i], dec_state[i]]))
+                        # use cell state
+                        new_mu, new_logsigma, new_sigma, new_enc_state = self.encode(enc_state[i], tf.concat([r[i], dec_state[i][0]], 1))
                         # mu and sigma: [self.n_z] latent code length
 
                         if t == 0:
@@ -364,7 +375,8 @@ class Draw():
                         # TODO: further research, dont' quite understand
                         z[i] = self.sampleQ(self.mu[t][i], self.sigma[t][i])  # [self.n_z]: latent variable
                         # retrieve the hidden layer of RNN
-                        h_dec, new_dec_state = self.decode_layer(dec_state[i], z[i])
+                        new_dec_state = self.decode_layer(dec_state[i], z[i])
+                        # h_dec, new_dec_state = self.decode_layer(dec_state[i], z[i])
                         dec_state[i].assign(new_dec_state)
                         # map from hidden layer -> image portion, and then write it.
                         # self.cs[t] = c_prev + self.write_basic(h_dec)
@@ -372,10 +384,10 @@ class Draw():
                         # write window will be extrapolated to canvas size
                         if t == 0:
                             # initialize canvas
-                            self.canvas.append([c_prev[i] + self.write_attention(h_dec, tf.shape(batch_images[i]))])
+                            self.canvas.append([c_prev[i] + self.write_attention(new_dec_state[0], tf.shape(batch_images[i]))])
 
                         else:
-                            self.canvas[i].append(c_prev[i] + self.write_attention(h_dec, tf.shape(batch_images[i])))
+                            self.canvas[i].append(c_prev[i] + self.write_attention(new_dec_state[0], tf.shape(batch_images[i])))
 
                         # h_dec_prev[i] = h_dec
 
