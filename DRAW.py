@@ -303,15 +303,14 @@ class Draw():
 
                 batch_images = batch
 
-                # have to use the whole tuple because of state_is_tuple limitaion
-                # m_state
+                # have to use the whole tuple because of state_is_tuple limitation
                 enc_state = [self.lstm_enc.zero_state(1, tf.float32)] * len(batch_images)
                 dec_state = [self.lstm_enc.zero_state(1, tf.float32)] * len(batch_images)
                 # print(self.sess.run(tf.shape(dec_state[0])))
 
                 # h_dec_prev: decoder state of previous time step, list of tensors
                 # initialize previous decoder state
-                h_dec_prev = [tf.zeros((self.n_hidden))] * len(batch_images)
+                # h_dec_prev = [tf.zeros((self.n_hidden))] * len(batch_images)
 
                 # computation graph construction
                 for t in range(self.sequence_length):
@@ -369,7 +368,7 @@ class Draw():
                             self.sigma[i].append(new_sigma)
 
                         # self.mu[i][t], self.logsigma[i][t], self.sigma[i][t], new_enc_state = self.encode(enc_state, tf.concat(1, [r[i], h_dec_prev[i]]))
-                        enc_state[i].assign(new_enc_state)  # per image
+                        enc_state[i] = new_enc_state  # per image
 
                         # sample from the distrib to get z
                         # TODO: further research, dont' quite understand
@@ -377,7 +376,7 @@ class Draw():
                         # retrieve the hidden layer of RNN
                         new_dec_state = self.decode_layer(dec_state[i], z[i])
                         # h_dec, new_dec_state = self.decode_layer(dec_state[i], z[i])
-                        dec_state[i].assign(new_dec_state)
+                        dec_state[i] = new_dec_state
                         # map from hidden layer -> image portion, and then write it.
                         # self.cs[t] = c_prev + self.write_basic(h_dec)
 
