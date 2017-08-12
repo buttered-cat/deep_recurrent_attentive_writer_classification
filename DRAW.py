@@ -42,7 +42,7 @@ class Draw():
         # self.load_images("./data/train", "*.jpg")
 
         # Qsampler noise
-        self.e = [tf.random_normal([self.n_z], mean=0, stddev=1) for i in range(self.batch_size)]    # [self.batch_size]
+        self.e = [tf.random_normal([self.n_z], mean=0, stddev=1)] * self.batch_size   # [self.batch_size]
 
         # What kinda structure? A cell IS A CELL, with vectors as input/output
         self.lstm_enc = tf.nn.rnn_cell.LSTMCell(self.n_hidden, state_is_tuple=True) # encoder Op
@@ -190,8 +190,8 @@ class Draw():
         return mu, logsigma, sigma, new_state
 
 
-    def sampleQ(self, mu, sigma):
-        return mu + sigma*self.e        # element-wise multiplication of two vectors (dim=1)
+    def sampleQ(self, mu, sigma, i):
+        return mu + sigma*self.e[i]        # element-wise multiplication of two vectors (dim=1)
 
     def decode_layer(self, prev_state, latent):
         # update decoder RNN with latent var
@@ -246,7 +246,7 @@ class Draw():
         with open("./data/test/file_list", "w") as file:
             for i in testing_data_index:
                 filename = filenamePattern.search(data[i]).group()
-                file.write(filename)
+                file.write(filename + '\n')
 
         return [data[i] for i in training_data_index]
 
@@ -272,11 +272,14 @@ class Draw():
         test_writer = tf.summary.FileWriter('./log/train_log')
 
         # TODO: tensorboard functions
+        print("graph construction:")
         for e in range(10):
+            print("epoch: %i" % e)
             # epoch
             # why skipping 2 batches?
             # for i in range((len(data) / self.batch_size) - 2):
             for batch_id in range(num_batch):
+                print("\tbatch id: %i" % batch_id)
                 # i: batch number
                 batch_upper_bound = (batch_id+1)*self.batch_size if batch_id != data_len / self.batch_size + 1 else data_len
                 batch_files = data[batch_id*self.batch_size: batch_upper_bound]
@@ -314,6 +317,7 @@ class Draw():
 
                 # computation graph construction
                 for t in range(self.sequence_length):
+                    print("\t\ttimestep: %i" % t)
                     # generate one computation graph for each image? No, equivalent to batch_size = 1. see start of class def
                     # batch_images = tf.unstack(self.images)
                     # c_prev: list with shape [batch_size], each element is a tensor of an image canvas
@@ -323,12 +327,13 @@ class Draw():
                     # r: list of tensors
                     r = []
                     # z: list of tensors
-                    z = []
+                    z = [0] * len(batch_images)
 
                     # below defines computation graph
                     i0 = tf.constant(0)
 
                     for i in range(len(batch_images)):
+                        print("\t\t\timage: %i" % i)
                     # def while_body(i):
                         # for each image:
                         # error image + original image
@@ -372,7 +377,10 @@ class Draw():
 
                         # sample from the distrib to get z
                         # TODO: further research, dont' quite understand
-                        z[i] = self.sampleQ(self.mu[t][i], self.sigma[t][i])  # [self.n_z]: latent variable
+                        # print(t, i)
+                        # print(self.mu[t][i])
+                        # print(self.sigma[t][i])
+                        z[i] = self.sampleQ(self.mu[i][t], self.sigma[i][t], i)  # [self.n_z]: latent variable
                         # retrieve the hidden layer of RNN
                         new_dec_state = self.decode_layer(dec_state[i], z[i])
                         # h_dec, new_dec_state = self.decode_layer(dec_state[i], z[i])
@@ -400,7 +408,7 @@ class Draw():
                 kl_terms_list = []
 
                 # checkout https://stackoverflow.com/questions/35330117/how-can-i-run-a-loop-with-a-tensor-as-its-range-in-tensorflow
-                i0 = tf.constant(0)
+                # i0 = tf.constant(0)
 
                 # def while_cond(i, c, l):
                 #     return i < tf.shape(self.canvas)[0]  # for all images in a batch
