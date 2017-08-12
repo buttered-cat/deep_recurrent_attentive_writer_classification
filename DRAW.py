@@ -4,6 +4,8 @@ from ops import *
 from utils import *
 from glob import glob
 import os
+import random
+import re
 
 
 # TODO: validation + early stopping. Maybe hold-out + cross validation the rest?
@@ -29,6 +31,7 @@ class Draw():
         self.n_z = 134       # latent code length
         self.sequence_length = 10
         self.batch_size = 64
+        self.portion_as_training_data = 4/5
         self.share_parameters = False
 
         # TODO: variable image size: maybe classify by size and do batch matrix multiplication
@@ -224,8 +227,34 @@ class Draw():
         return wr * 1.0/gamma
 
 
+    def get_training_data(self):
+        train_data = glob(os.path.join("./data/train", "*.jpg"))
+        val_data = glob(os.path.join("./data/val", "*.jpg"))
+
+        pivot = len(train_data) - 1     # index of last train_data element
+        data = train_data + val_data
+
+        data_len = len(data)
+        index_list = range(data_len)
+        training_data_index = random.sample(index_list, int(self.portion_as_training_data * data_len))
+        testing_data_index = list(set(index_list) - set(training_data_index))
+
+        filenamePattern = re.compile(r'[^/\\]+\.jpg')
+        with open("./data/test/file_list", "w") as file:
+            for i in testing_data_index:
+                if i > pivot:
+                    str = "va\t"    # ./data/val
+                else:
+                    str = "tr\t"    # ./data/train
+
+                str += filenamePattern.search(data[i]).group()
+                file.write(str)
+
+        return [data[i] for i in training_data_index]
+
+
     def train(self):
-        data = glob(os.path.join("./data/train", "*.jpg"))
+        data = self.get_training_data()
         # base: first 64 images of the training set
         # base = np.array([get_image(sample_file) for sample_file in data[0:64]])
         # base += 1
@@ -241,6 +270,10 @@ class Draw():
 
         variables_not_initialized = True
 
+        train_writer = tf.summary.FileWriter('./log/train_log')
+        test_writer = tf.summary.FileWriter('./log/train_log')
+
+        # TODO: tensorboard functions
         for e in range(10):
             # epoch
             # why skipping 2 batches?
@@ -430,17 +463,22 @@ class Draw():
                 self.train_op = optimizer.apply_gradients(grads)
 
                 if variables_not_initialized:
+                    # initialize variables once
                     self.sess.run(tf.global_variables_initializer())
+
                     saver = tf.train.Saver(max_to_keep=5)
+
+                    # update graph once
+                    train_writer.add_graph(self.sess.graph)
+                    test_writer.add_graph(self.sess.graph)
                     variables_not_initialized = False
 
 
 
 
 
-
                 cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([self.canvas, self.attn_params, self.generation_loss, self.latent_loss, self.train_op])
-                print("epoch %d iter %d genloss %f latloss %f" % (e, batch_id, gen_loss, lat_loss))
+                print("epoch %d iter %d: genloss %f, latloss %f" % (e, batch_id, gen_loss, lat_loss))
                 # print(attn_params[0].shape)
                 # print(attn_params[1].shape)
                 # print(attn_params[2].shape)
