@@ -228,11 +228,7 @@ class Draw():
 
 
     def get_training_data(self):
-        train_data = glob(os.path.join("./data/train", "*.jpg"))
-        val_data = glob(os.path.join("./data/val", "*.jpg"))
-
-        pivot = len(train_data) - 1     # index of last train_data element
-        data = train_data + val_data
+        data = glob(os.path.join("./data/train", "*.jpg"))
 
         data_len = len(data)
         index_list = range(data_len)
@@ -242,13 +238,8 @@ class Draw():
         filenamePattern = re.compile(r'[^/\\]+\.jpg')
         with open("./data/test/file_list", "w") as file:
             for i in testing_data_index:
-                if i > pivot:
-                    str = "va\t"    # ./data/val
-                else:
-                    str = "tr\t"    # ./data/train
-
-                str += filenamePattern.search(data[i]).group()
-                file.write(str)
+                filename = filenamePattern.search(data[i]).group()
+                file.write(filename)
 
         return [data[i] for i in training_data_index]
 
