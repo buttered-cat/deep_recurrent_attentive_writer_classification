@@ -28,7 +28,8 @@ class Draw():
 
         self.attention_n = 100
         self.n_hidden = 512
-        self.n_z = 134       # latent code length
+        self.n_z = 50       # latent code length
+        self.num_class = 134        # number of label classes
         self.sequence_length = 10
         self.batch_size = 64
         self.portion_as_training_data = 4/5
@@ -318,16 +319,17 @@ class Draw():
 
 
                 # flatten w.r.t #images
-                # enc_state = tf.unstack(enc_state)
-                # dec_state = tf.unstack(dec_state)
+                # enc_state_history = tf.unstack(enc_state_history)
+                # dec_state_history = tf.unstack(dec_state_history)
 
                 batch_images = batch[0]
 
                 # have to use the whole tuple because of state_is_tuple limitation
-                enc_state = [self.lstm_enc.zero_state(1, tf.float32)] * len(batch_images)
-                # print(enc_state[0])
-                dec_state = [self.lstm_enc.zero_state(1, tf.float32)] * len(batch_images)
-                # print(self.sess.run(tf.shape(dec_state[0])))
+                # [batch_len, sequence_length + 1]
+                enc_state_history = [[self.lstm_enc.zero_state(1, tf.float32)]] * len(batch_images)
+                # print(enc_state_history[0])
+                dec_state_history = [[self.lstm_enc.zero_state(1, tf.float32)]] * len(batch_images)
+                # print(self.sess.run(tf.shape(dec_state_history[0])))
 
                 # h_dec_prev: decoder state of previous time step, list of tensors
                 # initialize previous decoder state
@@ -372,12 +374,11 @@ class Draw():
                         # read the image
                         # r = self.read_basic(x,x_hat,h_dec_prev)
                         # [1, 2 * self.attention_n * self.attention_n * channels]
-                        r.append(self.read_attention(batch_images[i], x_hat[i], dec_state[i][0]))   # use cell state
+                        r.append(self.read_attention(batch_images[i], x_hat[i], dec_state_history[i][t][0]))   # use cell state
                         # encode it to gauss distrib
 
                         # use cell state
-                        # print(enc_state[i])
-                        new_mu, new_logsigma, new_sigma, new_enc_state_tuple = self.encode(enc_state[i], tf.concat([r[i], dec_state[i][0]], 1))
+                        new_mu, new_logsigma, new_sigma, new_enc_state_tuple = self.encode(enc_state_history[i][t], tf.concat([r[i], dec_state_history[i][t][0]], 1))
                         # mu and sigma: [self.n_z] latent code length
 
                         if t == 0:
@@ -391,8 +392,8 @@ class Draw():
                             self.logsigma[i].append(new_logsigma)
                             self.sigma[i].append(new_sigma)
 
-                        # self.mu[i][t], self.logsigma[i][t], self.sigma[i][t], new_enc_state_tuple = self.encode(enc_state, tf.concat(1, [r[i], h_dec_prev[i]]))
-                        enc_state[i] = new_enc_state_tuple  # per image
+                        # self.mu[i][t], self.logsigma[i][t], self.sigma[i][t], new_enc_state_tuple = self.encode(enc_state_history, tf.concat(1, [r[i], h_dec_prev[i]]))
+                        enc_state_history[i].append(new_enc_state_tuple)  # per image
 
                         # sample from the distrib to get z
                         # TODO: further research, dont' quite understand
@@ -401,9 +402,9 @@ class Draw():
                         # print(self.sigma[t][i])
                         z[i] = self.sampleQ(self.mu[i][t], self.sigma[i][t], i)  # [self.n_z]: latent variable
                         # retrieve the hidden layer of RNN
-                        new_dec_state_tuple = self.decode_layer(dec_state[i], z[i])
-                        # h_dec, new_dec_state_tuple = self.decode_layer(dec_state[i], z[i])
-                        dec_state[i] = new_dec_state_tuple
+                        new_dec_state_tuple = self.decode_layer(dec_state_history[i][t], z[i])
+                        # h_dec, new_dec_state_tuple = self.decode_layer(dec_state_history[i], z[i])
+                        dec_state_history[i].append(new_dec_state_tuple)
                         # map from hidden layer -> image portion, and then write it.
                         # self.cs[t] = c_prev + self.write_basic(h_dec)
 
@@ -491,6 +492,22 @@ class Draw():
                     if g is not None:
                         grads[i] = (tf.clip_by_norm(g, 5), v)
                 self.train_op = optimizer.apply_gradients(grads)
+
+                # take encoder state sequence of every image
+                batch_encoder_states = []
+                for i in range(len(batch_images)):
+                    batch_encoder_states.append(tf.stack([s.c for s in enc_state_history[i][1:]]))   # [sequence_length]
+
+                # TODO: concat & add a dense layer & softmax
+
+                # tensor[batch_len, self.sequence_length, self.n_hidden]
+                batch_encoder_states = tf.stack(batch_encoder_states)
+
+                # tensor[batch_len, self.num_class]
+                labels = tf.one_hot(indices=batch[1], depth=self.num_class, on_value=1.0, off_value=0.0, axis=-1)
+
+
+
 
                 if variables_not_initialized:
                     # initialize variables once
