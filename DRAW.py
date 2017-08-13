@@ -22,18 +22,21 @@ import re
 # TODO: need a memory mechanism
 class Draw():
     def __init__(self):
+        self.DEBUG = True
 
         self.img_size = 64
         self.num_channels = 3
 
-        self.attention_n = 100
-        self.n_hidden = 512
+        self.attention_n = 24
+        self.n_hidden = 128
         self.n_z = 50       # latent code length
         self.num_class = 134        # number of label classes
-        self.sequence_length = 10
-        self.batch_size = 64
+        self.sequence_length = 3
+        self.batch_size = 2 if self.DEBUG else 64
         self.portion_as_training_data = 4/5
         self.share_parameters = False
+
+        self.optimizer = tf.train.AdamOptimizer(1e-3, beta1=0.5)
 
         # TODO: variable image size: maybe classify by size and do batch matrix multiplication
         # checkout https://stackoverflow.com/questions/38966533/different-image-sizes-in-tensorflow-with-batch-size-1
@@ -43,7 +46,7 @@ class Draw():
         # self.load_images("./data/train", "*.jpg")
 
         # Qsampler noise
-        self.e = [tf.random_normal([self.n_z], mean=0, stddev=1)] * self.batch_size   # [self.batch_size]
+        self.e = [tf.random_normal([self.n_z], mean=0, stddev=1) for i in range(self.batch_size)]   # [self.batch_size]
 
         # What kinda structure? A cell IS A CELL, with vectors as input/output
         self.lstm_enc = tf.nn.rnn_cell.LSTMCell(self.n_hidden, state_is_tuple=True) # encoder Op
@@ -231,17 +234,18 @@ class Draw():
         # sep_colors = tf.reshape(wr, [self.batch_size, self.num_channels, self.img_size ** 2])
         # wr = tf.reshape(wr, [self.num_channels, self.batch_size, self.img_size, self.img_size])
         wr = tf.transpose(wr, [1, 2, 0])
-        wr = tf.reshape(wr, [img_size[0] * img_size[1] * self.num_channels])    # [img_size[0] * img_size[1] * self.num_channels]
+        # wr = tf.reshape(wr, [img_size[0] * img_size[1] * self.num_channels])    # [img_size[0] * img_size[1] * self.num_channels]
         return wr * 1.0/gamma
 
 
     def get_training_data(self):
         data = []
-        with open("./data/labels/merged_image_labels.txt", "r") as file:
+        image_label_path = "./data/labels/image_labels_debug.txt" if self.DEBUG else "./data/labels/image_labels.txt"
+        with open(image_label_path, "r") as file:
             for line in file:
                 image_label_pattern = re.compile(r'(\S+) (\d+) \S+')
                 m = image_label_pattern.match(line)
-                data.append((m.group(1), m.group(2)))       # (filename, label_num)
+                data.append((m.group(1), int(m.group(2))))       # (filename, label_num)
 
         data_len = len(data)
         index_list = range(data_len)
@@ -252,7 +256,7 @@ class Draw():
         with open("./data/test/test_file_list", "w") as file:
             for i in testing_data_index:
                 # filename = filename_pattern.search(data[i]).group()
-                file.write(data[i][0] + ' ' + data[i][1])
+                file.write(data[i][0] + ' ' + str(data[i][1]) + '\n')
 
         return [data[i] for i in training_data_index]       # [(filename, label_num)]
 
@@ -326,9 +330,12 @@ class Draw():
 
                 # have to use the whole tuple because of state_is_tuple limitation
                 # [batch_len, sequence_length + 1]
-                enc_state_history = [[self.lstm_enc.zero_state(1, tf.float32)]] * len(batch_images)
+                # VICIOUS TRAP!!! the first form copies the same list object many times!
+                # see https://stackoverflow.com/questions/5280799/list-append-changing-all-elements-to-the-appended-item
+                # enc_state_history = [[self.lstm_enc.zero_state(1, tf.float32)]] * len(batch_images)
+                enc_state_history = [[self.lstm_enc.zero_state(1, tf.float32)] for i in range(len(batch_images))]
                 # print(enc_state_history[0])
-                dec_state_history = [[self.lstm_enc.zero_state(1, tf.float32)]] * len(batch_images)
+                dec_state_history = [[self.lstm_enc.zero_state(1, tf.float32)] for i in range(len(batch_images))]
                 # print(self.sess.run(tf.shape(dec_state_history[0])))
 
                 # h_dec_prev: decoder state of previous time step, list of tensors
@@ -348,7 +355,7 @@ class Draw():
                     # r: list of tensors
                     r = []
                     # z: list of tensors
-                    z = [0] * len(batch_images)
+                    z = [0 for i in range(len(batch_images))]
 
                     # i0 = tf.constant(0)
 
@@ -408,7 +415,7 @@ class Draw():
                         # map from hidden layer -> image portion, and then write it.
                         # self.cs[t] = c_prev + self.write_basic(h_dec)
 
-                        # write window will be extrapolated to canvas size
+                        # TODO: write window will be extrapolated to canvas size?
                         if t == 0:
                             # initialize canvas
                             self.canvas.append([c_prev[i] + self.write_attention(new_dec_state_tuple.c, tf.shape(batch_images[i]))])
@@ -452,14 +459,15 @@ class Draw():
                 # TODO: why sigmoid? Pixel range
                 # canvas shape: [batch, height, width, channel]
                 # self.generated_images = tf.nn.sigmoid(np.array([c[-1] for c in self.canvas]))
-                self.generated_images = tf.nn.sigmoid(canvas_list)
+                # self.generated_images = tf.nn.sigmoid(canvas_list)
+                self.generated_images = canvas_list
 
                 # log likelihood of binary image
                 # self.generation_loss = tf.reduce_mean(-tf.reduce_sum(self.images * tf.log(1e-10 + self.generated_images) + (1-self.images) * tf.log(1e-10 + 1 - self.generated_images), 1))
                 # TODO: mean or sum?
                 self.generation_loss = tf.reduce_sum(tf.stack(generation_loss_list))
 
-                kl_terms = [0] * self.sequence_length
+                kl_terms = [0 for i in range(self.sequence_length)]
                 for t in range(self.sequence_length):
                     # def while_cond(i, mu_list, sigma_list, logsigma_list, kl_terms_list):
                     #     return i < tf.shape(mu_list)[0]
@@ -483,63 +491,93 @@ class Draw():
                     kl_terms_list = []
 
                 self.latent_loss = tf.reduce_mean(tf.add_n(kl_terms))
-                self.cost = self.generation_loss + self.latent_loss
-                optimizer = tf.train.AdamOptimizer(1e-3, beta1=0.5)
-                grads = optimizer.compute_gradients(self.cost)
+
+
+                # classification
+                # take encoder state sequence of every image
+                batch_encoder_states = []
+                # print(len(enc_state_history[0]))
+                for i in range(len(batch_images)):
+                    # tensor[1, sequence_length * self.n_hidden]
+                    batch_encoder_states.append(tf.concat([s.c for s in enc_state_history[i][1:]], axis=1))
+                    # print(self.sess.run(tf.shape(batch_encoder_states[i])))
+
+                # tensor[batch_len, self.sequence_length * self.n_hidden]
+                batch_encoder_states = tf.concat(batch_encoder_states, axis=0)
+
+                # tensor[batch_len, self.num_class]
+                logits = dense(batch_encoder_states, self.sequence_length * self.n_hidden, self.num_class, "pre_softmax")
+                labels = tf.constant(batch[1], dtype=tf.int64, name="batch_image_labels")
+
+                prediction_correctness = tf.equal(tf.argmax(logits, axis=1), labels)
+                classification_accuracy = tf.reduce_mean(tf.cast(prediction_correctness, tf.float32))
+
+                # tensor[batch_len, self.num_class]
+                # labels = tf.one_hot(indices=batch[1], depth=self.num_class, on_value=1.0, off_value=0.0, axis=-1)
+
+                # cross_entropy_losses = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels, dim=-1, name=)
+                cross_entropy_losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels,  name="softmax_xentropy")
+                classification_loss = tf.reduce_sum(cross_entropy_losses)
+
+
+
+                self.cost = self.generation_loss + self.latent_loss + classification_loss
+                print("I'm computing gradients!")
+                grads = self.optimizer.compute_gradients(self.cost)
 
                 # clip gradients
                 for i, (g, v) in enumerate(grads):
                     if g is not None:
                         grads[i] = (tf.clip_by_norm(g, 5), v)
-                self.train_op = optimizer.apply_gradients(grads)
+                self.train_op = self.optimizer.apply_gradients(grads)
 
-                # take encoder state sequence of every image
-                batch_encoder_states = []
-                for i in range(len(batch_images)):
-                    batch_encoder_states.append(tf.stack([s.c for s in enc_state_history[i][1:]]))   # [sequence_length]
-
-                # TODO: concat & add a dense layer & softmax
-
-                # tensor[batch_len, self.sequence_length, self.n_hidden]
-                batch_encoder_states = tf.stack(batch_encoder_states)
-
-                # tensor[batch_len, self.num_class]
-                labels = tf.one_hot(indices=batch[1], depth=self.num_class, on_value=1.0, off_value=0.0, axis=-1)
-
+                # update graph
+                train_writer.add_graph(self.sess.graph)
+                test_writer.add_graph(self.sess.graph)
+                print("I'm done computing gradients!")
 
 
 
                 if variables_not_initialized:
                     # initialize variables once
+                    print("I'm initializing variables!")
                     self.sess.run(tf.global_variables_initializer())
-
+                    print("I've passed variable init!")
                     saver = tf.train.Saver(max_to_keep=5)
-
-                    # update graph once
-                    train_writer.add_graph(self.sess.graph)
-                    test_writer.add_graph(self.sess.graph)
                     variables_not_initialized = False
 
 
 
 
 
-                cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([self.canvas, self.attn_params, self.generation_loss, self.latent_loss, self.train_op])
-                print("epoch %d iter %d: genloss %f, latloss %f" % (e, batch_id, gen_loss, lat_loss))
+                # cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([
+                #     self.canvas, self.attn_params, self.generation_loss, self.latent_loss,
+                #     classification_loss, classification_accuracy, self.train_op
+                # ])
+                print("I'm running!")
+                cs, gen_loss, lat_loss, cls_loss, acc, _ = self.sess.run([
+                    self.canvas, self.generation_loss, self.latent_loss,
+                    classification_loss, classification_accuracy, self.train_op
+                ])
+                print("epoch %d iter %d: gen_loss %f, lat_loss %f, classification_loss %f, acc %f"
+                      % (e, batch_id, gen_loss, lat_loss, cls_loss, acc))
                 # print(attn_params[0].shape)
                 # print(attn_params[1].shape)
                 # print(attn_params[2].shape)
-                if batch_id % 800 == 0:
+                ckpt_step_len = 2 if self.DEBUG else 800
+                num_demo_image = self.batch_size if self.DEBUG else 10
 
-                    saver.save(self.sess, os.getcwd() + "/model", global_step=e*10000 + batch_id)
+                if batch_id % ckpt_step_len == 0:
+
+                    saver.save(self.sess, "./model", global_step=e*10000 + batch_id)
 
                     # cs = 1.0/(1.0+np.exp(-np.array(cs)))    # x_recons=sigmoid(canvas)
 
-                    for cs_iter in range(10):       # print first 10 images in canvas
+                    for cs_iter in range(num_demo_image):       # print first 10 images in canvas
                         img = cs[cs_iter][-1]
                         # results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_channels])
                         # print(results_square.shape)
-                        save_image("results/" + str(e) + "-" + str(batch_id) + "-#" + str(cs_iter) + ".jpg", img)
+                        save_image("results/epoch" + str(e) + "-batch" + str(batch_id) + "-iter" + str(cs_iter) + ".jpg", img)
 
 
     # def load_images(self, path, pattern):

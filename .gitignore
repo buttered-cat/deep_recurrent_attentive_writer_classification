@@ -1,1 +1,4 @@
-/data
+/data/train
+/data/train_duplicates
+/data/test
+/results

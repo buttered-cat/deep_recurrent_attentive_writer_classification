@@ -63,7 +63,10 @@ def unpickle(file):
 
 def save_image(name, img):
     # print img[:10][:10]
-    scipy.misc.toimage(img, cmin=0, cmax=255).save(name)
+    # TODO: in case of "module 'scipy.misc' has no attribute 'toimage'": install pillow on new environment!
+    # TODO: range seems not right
+    # scipy.misc.toimage(img, cmin=0, cmax=255).save(name)
+    scipy.misc.toimage(img).save(name)
 
 
 def sigmoid(x):
