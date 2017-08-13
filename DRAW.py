@@ -176,18 +176,18 @@ class Draw():
             # TODO: which to use?
             # print(self.sess.run(tf.shape(image)))
             # print(self.sess.run(tf.shape(prev_state)))
-            new_state = self.lstm_enc(image, prev_state)     # tuple of [1(batch), self.n_hidden]
+            _, new_state_tuple = self.lstm_enc(image, prev_state)     # tuple of [1(batch), self.n_hidden]
             # hidden_layer, next_state = self.lstm_enc(image, prev_state)     # each: self.n_hidden?
 
         # map the RNN hidden state to latent variables
         # potential bug? dense() modifies scope if not provided
         # with tf.variable_scope("mu", reuse=self.share_parameters):
-        mu = dense(new_state[0], self.n_hidden, self.n_z, scope_name="mu")   # [self.n_z]
+        mu = dense(new_state_tuple.c, self.n_hidden, self.n_z, scope_name="mu")   # [self.n_z]
         # with tf.variable_scope("sigma", reuse=self.share_parameters):
-        logsigma = dense(new_state[0], self.n_hidden, self.n_z, scope_name="sigma")
+        logsigma = dense(new_state_tuple.c, self.n_hidden, self.n_z, scope_name="sigma")
         with tf.variable_scope("sigma", reuse=self.share_parameters):
             sigma = tf.exp(logsigma)
-        return mu, logsigma, sigma, new_state
+        return mu, logsigma, sigma, new_state_tuple
 
 
     def sampleQ(self, mu, sigma, i):
@@ -196,9 +196,9 @@ class Draw():
     def decode_layer(self, prev_state, latent):
         # update decoder RNN with latent var
         with tf.variable_scope("decoder", reuse=self.share_parameters):
-            new_state = self.lstm_dec(latent, prev_state)
+            _, new_state_tuple = self.lstm_dec(latent, prev_state)
 
-        return new_state
+        return new_state_tuple
 
     def write_basic(self, hidden_layer):
         # map RNN hidden state to image
@@ -243,7 +243,7 @@ class Draw():
         testing_data_index = list(set(index_list) - set(training_data_index))
 
         filenamePattern = re.compile(r'[^/\\]+\.jpg')
-        with open("./data/test/file_list", "w") as file:
+        with open("./data/test/test_file_list", "w") as file:
             for i in testing_data_index:
                 filename = filenamePattern.search(data[i]).group()
                 file.write(filename + '\n')
@@ -298,6 +298,14 @@ class Draw():
 
 
 
+                # reset these variables
+                # canvas: list of tensors [batch_size, time, tensor[canvas_size]]
+                self.canvas = []
+                # mu, logsigma, sigma: [(less or equal than) batch_size, self.sequence_length]
+                self.mu, self.logsigma, self.sigma = [], [], []
+
+                self.attn_params = []
+                self.generation_loss = []
 
 
                 # flatten w.r.t #images
@@ -308,6 +316,7 @@ class Draw():
 
                 # have to use the whole tuple because of state_is_tuple limitation
                 enc_state = [self.lstm_enc.zero_state(1, tf.float32)] * len(batch_images)
+                # print(enc_state[0])
                 dec_state = [self.lstm_enc.zero_state(1, tf.float32)] * len(batch_images)
                 # print(self.sess.run(tf.shape(dec_state[0])))
 
@@ -315,13 +324,14 @@ class Draw():
                 # initialize previous decoder state
                 # h_dec_prev = [tf.zeros((self.n_hidden))] * len(batch_images)
 
+                # c_prev: list with shape [batch_size], each element is a tensor of an image canvas
+                c_prev = []
+
                 # computation graph construction
                 for t in range(self.sequence_length):
                     print("\t\ttimestep: %i" % t)
                     # generate one computation graph for each image? No, equivalent to batch_size = 1. see start of class def
                     # batch_images = tf.unstack(self.images)
-                    # c_prev: list with shape [batch_size], each element is a tensor of an image canvas
-                    c_prev = []
                     # x_hat: list of tensors
                     x_hat = []
                     # r: list of tensors
@@ -329,8 +339,7 @@ class Draw():
                     # z: list of tensors
                     z = [0] * len(batch_images)
 
-                    # below defines computation graph
-                    i0 = tf.constant(0)
+                    # i0 = tf.constant(0)
 
                     for i in range(len(batch_images)):
                         print("\t\t\timage: %i" % i)
@@ -346,7 +355,7 @@ class Draw():
                             c_prev.append(tf.zeros([batch_image_shape[0], batch_image_shape[1], batch_image_shape[2]]))
 
                         else:
-                            c_prev[i].append(self.canvas[i][t - 1])
+                            c_prev[i] = self.canvas[i][t - 1]
 
                         # TODO: no sigmoid? cuz that suppresses gradient
                         # x_hat.append(batch_images[i] - tf.sigmoid(c_prev[i]))
@@ -358,7 +367,8 @@ class Draw():
                         # encode it to gauss distrib
 
                         # use cell state
-                        new_mu, new_logsigma, new_sigma, new_enc_state = self.encode(enc_state[i], tf.concat([r[i], dec_state[i][0]], 1))
+                        # print(enc_state[i])
+                        new_mu, new_logsigma, new_sigma, new_enc_state_tuple = self.encode(enc_state[i], tf.concat([r[i], dec_state[i][0]], 1))
                         # mu and sigma: [self.n_z] latent code length
 
                         if t == 0:
@@ -372,8 +382,8 @@ class Draw():
                             self.logsigma[i].append(new_logsigma)
                             self.sigma[i].append(new_sigma)
 
-                        # self.mu[i][t], self.logsigma[i][t], self.sigma[i][t], new_enc_state = self.encode(enc_state, tf.concat(1, [r[i], h_dec_prev[i]]))
-                        enc_state[i] = new_enc_state  # per image
+                        # self.mu[i][t], self.logsigma[i][t], self.sigma[i][t], new_enc_state_tuple = self.encode(enc_state, tf.concat(1, [r[i], h_dec_prev[i]]))
+                        enc_state[i] = new_enc_state_tuple  # per image
 
                         # sample from the distrib to get z
                         # TODO: further research, dont' quite understand
@@ -382,19 +392,19 @@ class Draw():
                         # print(self.sigma[t][i])
                         z[i] = self.sampleQ(self.mu[i][t], self.sigma[i][t], i)  # [self.n_z]: latent variable
                         # retrieve the hidden layer of RNN
-                        new_dec_state = self.decode_layer(dec_state[i], z[i])
-                        # h_dec, new_dec_state = self.decode_layer(dec_state[i], z[i])
-                        dec_state[i] = new_dec_state
+                        new_dec_state_tuple = self.decode_layer(dec_state[i], z[i])
+                        # h_dec, new_dec_state_tuple = self.decode_layer(dec_state[i], z[i])
+                        dec_state[i] = new_dec_state_tuple
                         # map from hidden layer -> image portion, and then write it.
                         # self.cs[t] = c_prev + self.write_basic(h_dec)
 
                         # write window will be extrapolated to canvas size
                         if t == 0:
                             # initialize canvas
-                            self.canvas.append([c_prev[i] + self.write_attention(new_dec_state[0], tf.shape(batch_images[i]))])
+                            self.canvas.append([c_prev[i] + self.write_attention(new_dec_state_tuple.c, tf.shape(batch_images[i]))])
 
                         else:
-                            self.canvas[i].append(c_prev[i] + self.write_attention(new_dec_state[0], tf.shape(batch_images[i])))
+                            self.canvas[i].append(c_prev[i] + self.write_attention(new_dec_state_tuple.c, tf.shape(batch_images[i])))
 
                         # h_dec_prev[i] = h_dec
 
@@ -460,6 +470,7 @@ class Draw():
 
                     kl_terms_batch_vector = tf.stack(kl_terms_list)  # [batch_size]
                     kl_terms[t] = kl_terms_batch_vector  # [batch_size]
+                    kl_terms_list = []
 
                 self.latent_loss = tf.reduce_mean(tf.add_n(kl_terms))
                 self.cost = self.generation_loss + self.latent_loss
