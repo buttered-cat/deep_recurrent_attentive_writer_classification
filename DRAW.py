@@ -235,23 +235,28 @@ class Draw():
 
 
     def get_training_data(self):
-        data = glob(os.path.join("./data/train", "*.jpg"))
+        data = []
+        with open("./data/labels/merged_image_labels.txt", "r") as file:
+            for line in file:
+                image_label_pattern = re.compile(r'(\S+) (\d+) \S+')
+                m = image_label_pattern.match(line)
+                data.append((m.group(1), m.group(2)))       # (filename, label_num)
 
         data_len = len(data)
         index_list = range(data_len)
         training_data_index = random.sample(index_list, int(self.portion_as_training_data * data_len))
         testing_data_index = list(set(index_list) - set(training_data_index))
 
-        filenamePattern = re.compile(r'[^/\\]+\.jpg')
+        # filename_pattern = re.compile(r'[^/\\]+\.jpg')
         with open("./data/test/test_file_list", "w") as file:
             for i in testing_data_index:
-                filename = filenamePattern.search(data[i]).group()
-                file.write(filename + '\n')
+                # filename = filename_pattern.search(data[i]).group()
+                file.write(data[i][0] + ' ' + data[i][1])
 
-        return [data[i] for i in training_data_index]
+        return [data[i] for i in training_data_index]       # [(filename, label_num)]
 
 
-    def train(self):
+    def train_encoder(self):
         data = self.get_training_data()
         # base: first 64 images of the training set
         # base = np.array([get_image(sample_file) for sample_file in data[0:64]])
@@ -283,8 +288,12 @@ class Draw():
                 # i: batch number
                 batch_upper_bound = (batch_id+1)*self.batch_size if batch_id != data_len / self.batch_size + 1 else data_len
                 batch_files = data[batch_id*self.batch_size: batch_upper_bound]
-                # [batch, tensor[height, width, channels]]
-                batch = [get_image(batch_file, desired_type=tf.float32) for batch_file in batch_files]
+                # [
+                #   [batch: tensor[height, width, channels)]
+                #   [batch: int]
+                # ]
+                batch = [[get_image(os.path.join("./data/train", batch_file[0] + ".jpg"), desired_type=tf.float32) for batch_file in batch_files]]
+                batch.append([batch_file[1] for batch_file in batch_files])
                 # batch = tf.stack(batch)        # [batch, height, width, channels]
 
                 # batch_images = np.array(batch).astype(np.float32)
@@ -312,7 +321,7 @@ class Draw():
                 # enc_state = tf.unstack(enc_state)
                 # dec_state = tf.unstack(dec_state)
 
-                batch_images = batch
+                batch_images = batch[0]
 
                 # have to use the whole tuple because of state_is_tuple limitation
                 enc_state = [self.lstm_enc.zero_state(1, tf.float32)] * len(batch_images)
@@ -439,7 +448,7 @@ class Draw():
                 #     generation_loss_list.append(tf.nn.l2_loss(self.images[i] - self.canvas[i][-1]))    # error image per image
 
                 # the final timestep
-                # TODO: why sigmoid?
+                # TODO: why sigmoid? Pixel range
                 # canvas shape: [batch, height, width, channel]
                 # self.generated_images = tf.nn.sigmoid(np.array([c[-1] for c in self.canvas]))
                 self.generated_images = tf.nn.sigmoid(canvas_list)
@@ -525,6 +534,17 @@ class Draw():
 
     # TODO: resume/continue training?
 
+
+    def encode_data(self, data):
+        # returns sequence of latent code
+        return
+
+
+
+    def train_classifier(self):
+        return
+
+
     def view(self):
         data = glob(os.path.join("./data/train", "*.jpg"))          # TODO: what is that?
         base = np.array([get_image(sample_file, desired_type=tf.float32) for sample_file in data[0:64]])
@@ -586,5 +606,5 @@ class Draw():
 
 
 model = Draw()
-model.train()
+model.train_encoder()
 # model.view()
