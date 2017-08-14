@@ -12,7 +12,7 @@ def get_image(image_path, desired_type=None):
         if desired_type is None:
             return img
         else:
-            return tf.cast(img, tf.float32)
+            return tf.cast(img, tf.float32) / 127.5 - 1     # range of [-1, 1]
         # [height, width, channels] tensor
 
 
@@ -64,7 +64,7 @@ def unpickle(file):
 def save_image(name, img):
     # print img[:10][:10]
     # TODO: in case of "module 'scipy.misc' has no attribute 'toimage'": install pillow on new environment!
-    scipy.misc.toimage(img, cmin=0, cmax=255).save(name)
+    scipy.misc.toimage(img, cmin=-1, cmax=1).save(name)
     # scipy.misc.toimage(img).save(name)
 
 

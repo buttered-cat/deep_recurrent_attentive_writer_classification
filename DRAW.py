@@ -1,3 +1,4 @@
+import numpy
 import tensorflow as tf
 import numpy as np
 from ops import *
@@ -231,8 +232,6 @@ class Draw():
         # [vert, attn_n] * [attn_n, attn_n] * [attn_n, horiz]
         wr = tf.matmul(Fyt, tf.matmul(w_array, Fx_array))       # [self.num_channels, img_size[0], img_size[1]]
 
-        wr = tf.sigmoid(wr) * 255.0     # force output to be between range of (0, 255)
-
         # sep_colors = tf.reshape(wr, [self.batch_size, self.num_channels, self.img_size ** 2])
         # wr = tf.reshape(wr, [self.num_channels, self.batch_size, self.img_size, self.img_size])
         wr = tf.transpose(wr, [1, 2, 0])
@@ -419,7 +418,7 @@ class Draw():
                         # map from hidden layer -> image portion, and then write it.
                         # self.cs[t] = c_prev + self.write_basic(h_dec)
 
-                        # TODO: write window will be extrapolated to canvas size?
+                        # TODO: write window will be extrapolated to canvas size, but ain't it supposed to write a small batch?
                         if t == 0:
                             # initialize canvas
                             self.canvas.append([c_prev[i] + self.write_attention(new_dec_state_tuple.c, tf.shape(batch_images[i]))])
@@ -469,7 +468,7 @@ class Draw():
                 # log likelihood of binary image
                 # self.generation_loss = tf.reduce_mean(-tf.reduce_sum(self.images * tf.log(1e-10 + self.generated_images) + (1-self.images) * tf.log(1e-10 + 1 - self.generated_images), 1))
                 # TODO: mean or sum?
-                self.generation_loss = tf.reduce_sum(tf.stack(generation_loss_list))
+                self.generation_loss = tf.reduce_mean(tf.stack(generation_loss_list))
 
                 kl_terms = [0 for i in range(self.sequence_length)]
                 for t in range(self.sequence_length):
@@ -563,7 +562,7 @@ class Draw():
                     self.canvas, self.generation_loss, self.latent_loss,
                     classification_loss, classification_accuracy, self.train_op
                 ])
-                print("epoch %d iter %d: gen_loss %f, lat_loss %f, classification_loss %f, acc %f"
+                print("epoch %d batch %d: gen_loss %f, lat_loss %f, classification_loss %f, acc %f"
                       % (e, batch_id, gen_loss, lat_loss, cls_loss, acc))
                 # print(attn_params[0].shape)
                 # print(attn_params[1].shape)
@@ -573,15 +572,19 @@ class Draw():
 
                 if batch_id % ckpt_step_len == 0:
 
-                    saver.save(self.sess, "./model", global_step=e*10000 + batch_id)
+                    saver.save(self.sess, "./model/model", global_step=e*10000 + batch_id)
 
                     # cs = 1.0/(1.0+np.exp(-np.array(cs)))    # x_recons=sigmoid(canvas)
 
                     for cs_iter in range(num_demo_image):       # print first 10 images in canvas
                         img = cs[cs_iter][-1]
+                        # print(type(img))
                         # results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_channels])
                         # print(results_square.shape)
-                        save_image("results/epoch" + str(e) + "-batch" + str(batch_id) + "-iter" + str(cs_iter) + ".jpg", img)
+                        # TODO: currently image tensor is clipped to range of [-1, 1], but there could be better ways
+                        # to let the network produce pixels of correct range.
+                        save_image("results/epoch#" + str(e) + "-batch#" + str(batch_id) + "-iter#" + str(cs_iter) + ".jpg",
+                                   numpy.clip(img, a_min=-1, a_max=1))
 
 
     # def load_images(self, path, pattern):
