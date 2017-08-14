@@ -177,7 +177,6 @@ class Draw():
             # see https://www.quora.com/What-is-the-meaning-of-%E2%80%9CThe-number-of-units-in-the-LSTM-cell
             # and https://stackoverflow.com/questions/36732877/about-lstm-cell-state-size
             # feeds a fixed size attention window
-            # TODO: which to use?
             # print(self.sess.run(tf.shape(image)))
             # print(self.sess.run(tf.shape(prev_state)))
             _, new_state_tuple = self.lstm_enc(image, prev_state)     # tuple of [1(batch), self.n_hidden]
@@ -231,6 +230,9 @@ class Draw():
         Fyt = tf.transpose(Fy_array, perm=[0, 2, 1])
         # [vert, attn_n] * [attn_n, attn_n] * [attn_n, horiz]
         wr = tf.matmul(Fyt, tf.matmul(w_array, Fx_array))       # [self.num_channels, img_size[0], img_size[1]]
+
+        wr = tf.sigmoid(wr) * 255.0     # force output to be between range of (0, 255)
+
         # sep_colors = tf.reshape(wr, [self.batch_size, self.num_channels, self.img_size ** 2])
         # wr = tf.reshape(wr, [self.num_channels, self.batch_size, self.img_size, self.img_size])
         wr = tf.transpose(wr, [1, 2, 0])
@@ -282,6 +284,7 @@ class Draw():
         test_writer = tf.summary.FileWriter('./log/train_log')
 
         # TODO: tensorboard functions
+        # TODO: might as well concat all images and add padding
         print("graph construction:")
         for e in range(10):
             print("epoch: %i" % e)
@@ -299,6 +302,7 @@ class Draw():
                 # ]
                 batch = [[get_image(os.path.join("./data/train", batch_file[0] + ".jpg"), desired_type=tf.float32) for batch_file in batch_files]]
                 batch.append([batch_file[1] for batch_file in batch_files])
+                # print(self.sess.run(batch[0][0]))
                 # batch = tf.stack(batch)        # [batch, height, width, channels]
 
                 # batch_images = np.array(batch).astype(np.float32)
@@ -348,7 +352,7 @@ class Draw():
                 # computation graph construction
                 for t in range(self.sequence_length):
                     print("\t\ttimestep: %i" % t)
-                    # generate one computation graph for each image? No, equivalent to batch_size = 1. see start of class def
+                    # generate one computation graph for each image? see start of class def
                     # batch_images = tf.unstack(self.images)
                     # x_hat: list of tensors
                     x_hat = []
