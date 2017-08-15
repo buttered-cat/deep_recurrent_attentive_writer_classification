@@ -376,6 +376,38 @@ class Draw():
         return [data[i] for i in training_data_index]       # [(filename, label_num)]
 
 
+    def generate_batches(self, data):
+        data_len = len(data)
+        num_batches = data_len // self.batch_size + (1 if data_len % self.batch_size != 0 else 0)
+        batches_with_padding = []
+
+        for batch_id in range(num_batches):
+            batch_upper_bound = (batch_id + 1) * self.batch_size if batch_id != data_len / self.batch_size + 1 else data_len
+            batch_files = data[batch_id * self.batch_size: batch_upper_bound]
+            batch = np.asarray([get_image(os.path.join("./data/train", batch_file[0] + ".jpg"), desired_type=tf.float32)
+                     for batch_file in batch_files])
+            labels = [batch_file[1] for batch_file in batch_files]
+
+            # https://stackoverflow.com/questions/32037893/numpy-fix-array-with-rows-of-different-lengths-by-filling-the-empty-elements-wi
+            # batch_len * height
+            # TODO: 3 channels?
+            widths = np.array([len(img[0])for img in batch])
+            heights = np.array([len(img[:, 0]) for img in batch])
+
+            width_mask = np.arange(widths.max()) < widths[:, None]      # batch_len * max_width
+            height_mask = np.arange(heights.max()) < widths[:, None]      # batch_len * max_height
+
+            width_mask = np.expand_dims(width_mask, axis=1)     # batch_len * 1 * max_width
+            height_mask = height_mask[:, :, None]       # batch_len * max_height * 1
+            mask = np.logical_and(width_mask, height_mask)      # batch_len * max_height * max_width
+
+            out = np.zeros(mask.shape, dtype=np.float32)
+            out[mask] = np.concatenate(batch)
+
+            batches_with_padding.append((batch_id, out, labels))
+
+        return batches_with_padding     # [(batch_id, np array of images, labels)]
+
     def train(self):
         data = self.get_training_data()
         # base: first 64 images of the training set
@@ -387,8 +419,9 @@ class Draw():
         # merge_color() doesn't work on variable size image dataset
         # save_image("results/base.jpg", merge_color(base, [8, 8]))     # 0 <= each pixel <= 1?
 
-        data_len = len(data)
-        num_batch = data_len // self.batch_size + (1 if data_len % self.batch_size != 0 else 0)
+        batches = self.generate_batches(data)
+
+
         # print(data_len // self.batch_size)
 
         saver = tf.train.Saver(max_to_keep=5)
@@ -402,17 +435,8 @@ class Draw():
             # epoch
             # why skipping 2 batches?
             # for i in range((len(data) / self.batch_size) - 2):
-            for batch_id in range(num_batch):
+            for batch_id, batch_images, batch_labels in batches:
                 print("\tbatch id: %i" % batch_id)
-                # i: batch number
-                batch_upper_bound = (batch_id+1)*self.batch_size if batch_id != data_len / self.batch_size + 1 else data_len
-                batch_files = data[batch_id*self.batch_size: batch_upper_bound]
-                # [
-                #   [batch: tensor[height, width, channels)]
-                #   [batch: int]
-                # ]
-                batch = [[get_image(os.path.join("./data/train", batch_file[0] + ".jpg"), desired_type=tf.float32) for batch_file in batch_files]]
-                batch.append([batch_file[1] for batch_file in batch_files])
                 # print(self.sess.run(batch[0][0]))
                 # batch = tf.stack(batch)        # [batch, height, width, channels]
 
@@ -428,8 +452,8 @@ class Draw():
                 print("I'm running!")
                 cs, gen_loss, lat_loss, cls_loss, acc, _ = self.sess.run([
                     self.canvas, self.generation_loss, self.latent_loss,
-                    classification_loss, classification_accuracy, self.train_op
-                ])
+                    self.classification_loss, self.classification_accuracy, self.train_op
+                ], feed_dict={self.images: batch_images, self.labels: batch_labels})
                 print("epoch %d batch %d: gen_loss %f, lat_loss %f, classification_loss %f, acc %f"
                       % (e, batch_id, gen_loss, lat_loss, cls_loss, acc))
                 # print(attn_params[0].shape)
