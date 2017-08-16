@@ -5,8 +5,15 @@ import tensorflow as tf
 import _pickle as cPickle
 
 
+def get_image(image_path):
+    with open(image_path, mode='rb') as file:
+        img = scipy.misc.imread(image_path, mode="RGB").astype(np.float)
+        return img / 127.5 - 1     # range of [-1, 1]
+        # height * width * channels
+
+
 # check https://stackoverflow.com/questions/38966533/different-image-sizes-in-tensorflow-with-batch-size-1
-def get_image(image_path, desired_type=None):
+def get_image_tensor(image_path, desired_type=None):
     with open(image_path, mode='rb') as file:
         img = tf.image.decode_jpeg(file.read(), channels=3)
         if desired_type is None:
@@ -64,6 +71,8 @@ def unpickle(file):
 def save_image(name, img):
     # print img[:10][:10]
     # TODO: in case of "module 'scipy.misc' has no attribute 'toimage'": install pillow on new environment!
+    print(img.max())
+    print(img.min())
     scipy.misc.toimage(img, cmin=-1, cmax=1).save(name)
     # scipy.misc.toimage(img).save(name)
 

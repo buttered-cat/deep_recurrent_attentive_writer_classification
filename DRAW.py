@@ -44,7 +44,7 @@ class Draw():
         # and https://gist.github.com/eerwitt/518b0c9564e500b4b50f
         # tensor[batch_len, max(image height), max(image width), channels]
         self.images = tf.placeholder(tf.float32, [None, None, None, self.num_channels])       # variable image size
-        self.labels = tf.placeholder(tf.int32, [None])
+        self.labels = tf.placeholder(tf.int64, [None])
 
         # Qsampler noise
         self.e = tf.random_normal([self.batch_size, self.n_z], mean=0, stddev=1)   # tensor[self.batch_size, self.n_z]
@@ -116,7 +116,7 @@ class Draw():
             # retrieve the hidden layer of RNN
             new_dec_state_tuple = self.decode_layer(dec_state_history[t], z)
             # h_dec, new_dec_state_tuple = self.decode_layer(dec_state_history[i], z[i])
-            dec_state_history.append(new_dec_state_tuple)
+            dec_state_history[t+1] = new_dec_state_tuple
             # map from hidden layer -> image portion, and then write it.
             # self.cs[t] = c_prev + self.write_basic(h_dec)
 
@@ -258,7 +258,10 @@ class Draw():
         # we have the parameters for a patch of gaussian filters. apply them.
         Fxt = tf.transpose(Fx, perm=[0, 2, 1])  # transpose per image
         Fxt = tf.expand_dims(Fxt, 1)
+        Fxt = tf.concat([Fxt] * self.num_channels, axis=1)
         Fy = tf.expand_dims(Fy, 1)  # [batch_len, 1, height, width]
+        Fy = tf.concat([Fy] * self.num_channels, axis=1)    # [batch_len, 3, height, width]
+
         def filter_img(img, Fx, Fy, gamma):
             # img: batch * height * width * channels
             # img = tf.reshape(img, [-1, self.img_size, self.img_size, self.num_channels])    # batch_len * height * width * num_channels
@@ -271,7 +274,7 @@ class Draw():
             # square patch
             # TODO: variable aspect ratio glimpse?
             # [batch_len, num_channels, attention_n, attention_n]
-            glimpse = tf.matmul(Fy, tf.matmul(img_t, Fx))   # tensor mul
+            glimpse = tf.matmul(Fy, tf.matmul(img_t, Fxt))   # tensor mul
             # glimpse = tf.reshape(glimpse, [self.num_channels, self.batch_size, self.attention_n, self.attention_n])
             glimpse = tf.transpose(glimpse, [0, 2, 3, 1])      # [batch_len, attention_n, attention_n, num_channels]
             # reshape: iterate through two tensors simultaneously, and fill the elements
@@ -342,7 +345,10 @@ class Draw():
         # w_array = tf.reshape(w_t, [self.num_channels * self.batch_size, self.attention_n, self.attention_n])
         Fyt = tf.transpose(Fy, perm=[0, 2, 1])  # transpose per image
         Fyt = tf.expand_dims(Fyt, 1)
+        Fyt = tf.concat([Fyt] * self.num_channels, axis=1)
         Fx = tf.expand_dims(Fx, 1)  # [batch_len, 1, attention_n, width]
+        Fx = tf.concat([Fx] * self.num_channels, axis=1)    # [batch_len, 3, attention_n, width]
+
 
         wr = tf.matmul(Fyt, tf.matmul(w_t, Fx))       # [batch_len, self.num_channels, batch_shape[1], batch_shape[2]]
 
@@ -384,25 +390,25 @@ class Draw():
         for batch_id in range(num_batches):
             batch_upper_bound = (batch_id + 1) * self.batch_size if batch_id != data_len / self.batch_size + 1 else data_len
             batch_files = data[batch_id * self.batch_size: batch_upper_bound]
-            batch = np.asarray([get_image(os.path.join("./data/train", batch_file[0] + ".jpg"), desired_type=tf.float32)
+            batch = np.asarray([get_image(os.path.join("./data/train", batch_file[0] + ".jpg"))
                      for batch_file in batch_files])
             labels = [batch_file[1] for batch_file in batch_files]
 
             # https://stackoverflow.com/questions/32037893/numpy-fix-array-with-rows-of-different-lengths-by-filling-the-empty-elements-wi
             # batch_len * height
-            # TODO: 3 channels?
-            widths = np.array([len(img[0])for img in batch])
+            widths = np.array([len(img[0]) for img in batch])
             heights = np.array([len(img[:, 0]) for img in batch])
 
             width_mask = np.arange(widths.max()) < widths[:, None]      # batch_len * max_width
-            height_mask = np.arange(heights.max()) < widths[:, None]      # batch_len * max_height
+            height_mask = np.arange(heights.max()) < heights[:, None]      # batch_len * max_height
 
             width_mask = np.expand_dims(width_mask, axis=1)     # batch_len * 1 * max_width
             height_mask = height_mask[:, :, None]       # batch_len * max_height * 1
             mask = np.logical_and(width_mask, height_mask)      # batch_len * max_height * max_width
+            mask = numpy.stack([mask, mask, mask], axis=3)      # batch_len * max_height * max_width * 3(channels)
 
             out = np.zeros(mask.shape, dtype=np.float32)
-            out[mask] = np.concatenate(batch)
+            out[mask] = np.concatenate([np.reshape(image, (-1)) for image in batch])
 
             batches_with_padding.append((batch_id, out, labels))
 
@@ -428,7 +434,6 @@ class Draw():
 
 
         # TODO: tensorboard functions
-        # TODO: might as well concat all images and add padding
         print("graph construction:")
         for e in range(10):
             print("epoch: %i" % e)
@@ -488,20 +493,9 @@ class Draw():
 
     # TODO: resume/continue training?
 
-
-    def encode_data(self, data):
-        # returns sequence of latent code
-        return
-
-
-
-    def train_classifier(self):
-        return
-
-
     def view(self):
         data = glob(os.path.join("./data/train", "*.jpg"))          # TODO: what is that?
-        base = np.array([get_image(sample_file, desired_type=tf.float32) for sample_file in data[0:64]])
+        base = np.array([get_image(sample_file) for sample_file in data[0:64]])
         base += 1
         base /= 2
         # self.images = base
@@ -560,5 +554,8 @@ class Draw():
 
 
 model = Draw()
-model.train()
+# model.train()
 # model.view()
+data = model.get_training_data()
+batches = model.generate_batches(data)
+save_image("data/padded_images/1.jpg", batches[0][1][0, :, :, :])
