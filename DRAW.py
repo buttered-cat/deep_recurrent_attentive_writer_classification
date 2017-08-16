@@ -23,7 +23,7 @@ import re
 # TODO: need a memory mechanism
 class Draw():
     def __init__(self):
-        self.DEBUG = True
+        self.DEBUG = False
 
         self.img_size = 64
         self.num_channels = 3
@@ -32,7 +32,7 @@ class Draw():
         self.n_hidden = 128
         self.n_z = 50       # latent code length
         self.num_class = 134        # number of label classes
-        self.sequence_length = 3
+        self.sequence_length = 3 if self.DEBUG else 24
         self.batch_size = 2 if self.DEBUG else 64
         self.portion_as_training_data = 4/5
         self.share_parameters = False
@@ -356,6 +356,7 @@ class Draw():
         # wr = tf.reshape(wr, [self.num_channels, self.batch_size, self.img_size, self.img_size])
         wr = tf.transpose(wr, [0, 2, 3, 1])
         # wr = tf.reshape(wr, [img_size[0] * img_size[1] * self.num_channels])    # [img_size[0] * img_size[1] * self.num_channels]
+        gamma = tf.reshape(gamma, [-1, 1, 1, 1])
         return wr * 1.0/gamma
 
 
@@ -554,8 +555,8 @@ class Draw():
 
 
 model = Draw()
-# model.train()
+model.train()
 # model.view()
-data = model.get_training_data()
-batches = model.generate_batches(data)
-save_image("data/padded_images/1.jpg", batches[0][1][0, :, :, :])
+# data = model.get_training_data()
+# batches = model.generate_batches(data)
+# save_image("data/padded_images/1.jpg", batches[0][1][0, :, :, :])

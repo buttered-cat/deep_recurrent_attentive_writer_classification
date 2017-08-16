@@ -71,8 +71,6 @@ def unpickle(file):
 def save_image(name, img):
     # print img[:10][:10]
     # TODO: in case of "module 'scipy.misc' has no attribute 'toimage'": install pillow on new environment!
-    print(img.max())
-    print(img.min())
     scipy.misc.toimage(img, cmin=-1, cmax=1).save(name)
     # scipy.misc.toimage(img).save(name)
 
