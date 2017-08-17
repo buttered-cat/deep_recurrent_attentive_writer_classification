@@ -7,8 +7,19 @@ I've also tried processing the images one at a time as an alternative to padding
 
 The code is based on [kvfrans/draw-color](https://github.com/kvfrans/draw-color) (which is based on [ericjang/draw](https://github.com/ericjang/draw)), the major difference being that 1) It only supports square images of the same size as input. 2) it doesn't have a classification layer; 3) it uses python2 & tensorflow < 1.2; I've also modified some details which I perceived as programming fault.
 
+Dependencies
+---------------
+
+* Tensorflow >= 1.2.1
+* python >= 3.5
+* numpy
+* scipy
+* pickle
+* pillow
+
+
 TODO's and Known Issues
-------
+---------------
 
 This model is originally proposed for [an image classification contest held by Baidu](http://js.baidu.com/), but sadly I hadn't had time to finish it by the time it was due. I'm still working on it and the list will be updated accordingly.
 
