@@ -32,8 +32,8 @@ class Draw():
         self.n_hidden = 128
         self.n_z = 50       # latent code length
         self.num_class = 134        # number of label classes
-        self.sequence_length = 3 if self.DEBUG else 24
-        self.batch_size = 2 if self.DEBUG else 64
+        self.sequence_length = 3 if self.DEBUG else 12
+        self.batch_size = 2 if self.DEBUG else 8
         self.portion_as_training_data = 4/5
         self.share_parameters = False
 
@@ -90,8 +90,9 @@ class Draw():
         c_prev = []
 
         # computation graph construction
+        print("I'm constructing graph!")
         for t in range(self.sequence_length):
-            print("\t\ttimestep: %i" % t)
+            print("\ttimestep: %i" % t)
             # generate one computation graph for each image? see start of class def
             # x = tf.unstack(self.images)
             c_prev = tf.zeros(batch_shape) if t is 0 else self.canvas[t - 1]
@@ -406,7 +407,7 @@ class Draw():
             width_mask = np.expand_dims(width_mask, axis=1)     # batch_len * 1 * max_width
             height_mask = height_mask[:, :, None]       # batch_len * max_height * 1
             mask = np.logical_and(width_mask, height_mask)      # batch_len * max_height * max_width
-            mask = numpy.stack([mask, mask, mask], axis=3)      # batch_len * max_height * max_width * 3(channels)
+            mask = numpy.stack([mask] * self.num_channels, axis=3)      # batch_len * max_height * max_width * 3(channels)
 
             out = np.zeros(mask.shape, dtype=np.float32)
             out[mask] = np.concatenate([np.reshape(image, (-1)) for image in batch])
@@ -455,12 +456,12 @@ class Draw():
                 #     self.canvas, self.attn_params, self.generation_loss, self.latent_loss,
                 #     classification_loss, classification_accuracy, self.train_op
                 # ])
-                print("I'm running!")
+                print("\tI'm running!")
                 cs, gen_loss, lat_loss, cls_loss, acc, _ = self.sess.run([
                     self.canvas, self.generation_loss, self.latent_loss,
                     self.classification_loss, self.classification_accuracy, self.train_op
                 ], feed_dict={self.images: batch_images, self.labels: batch_labels})
-                print("epoch %d batch %d: gen_loss %f, lat_loss %f, classification_loss %f, acc %f"
+                print("\tepoch %d batch %d: gen_loss %f, lat_loss %f, classification_loss %f, acc %f"
                       % (e, batch_id, gen_loss, lat_loss, cls_loss, acc))
                 # print(attn_params[0].shape)
                 # print(attn_params[1].shape)
@@ -492,7 +493,7 @@ class Draw():
     #     self.images = images  # no need to feed anymore
 
 
-    # TODO: resume/continue training?
+    # TODO: resume training?
 
     def view(self):
         data = glob(os.path.join("./data/train", "*.jpg"))          # TODO: what is that?
