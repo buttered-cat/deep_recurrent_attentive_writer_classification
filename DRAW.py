@@ -1,12 +1,13 @@
-import numpy
 import tensorflow as tf
 import numpy as np
 from ops import *
 from utils import *
+from constants import *
 from glob import glob
 import os
 import random
 import re
+import subprocess
 
 
 # TODO: validation + early stopping. Maybe hold-out + cross validation the rest?
@@ -33,7 +34,7 @@ class Draw():
         self.n_z = 50       # latent code length
         self.num_class = 134        # number of label classes
         self.sequence_length = 3 if self.DEBUG else 12
-        self.batch_size = 2 if self.DEBUG else 64
+        self.batch_size = 2 if self.DEBUG else 8
         self.portion_as_training_data = 4/5
         self.share_parameters = False
 
@@ -67,7 +68,15 @@ class Draw():
         self.train_writer = tf.summary.FileWriter('./log/train_log')
         self.test_writer = tf.summary.FileWriter('./log/train_log')
 
+        print("GPU state before creating session:")
+        print(subprocess.check_output([NVIDIA_SMI_PATH]).decode('utf-8'))
+
+        # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.4)
+        # self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
         self.sess = tf.Session()
+
+        print("\nGPU state after creating session:")
+        print(subprocess.check_output([NVIDIA_SMI_PATH]).decode('utf-8'))
 
         x = self.images
         batch_shape = tf.shape(x)
@@ -412,7 +421,7 @@ class Draw():
         width_mask = np.expand_dims(width_mask, axis=1)  # batch_len * 1 * max_width
         height_mask = height_mask[:, :, None]  # batch_len * max_height * 1
         mask = np.logical_and(width_mask, height_mask)  # batch_len * max_height * max_width
-        mask = numpy.stack([mask] * self.num_channels, axis=3)  # batch_len * max_height * max_width * 3(channels)
+        mask = np.stack([mask] * self.num_channels, axis=3)  # batch_len * max_height * max_width * 3(channels)
 
         out = np.zeros(mask.shape, dtype=np.float32)
         out[mask] = np.concatenate([np.reshape(image, (-1)) for image in batch])
@@ -485,7 +494,7 @@ class Draw():
                         # TODO: currently image tensor is clipped to range of [-1, 1], but there could be better ways
                         # to let the network produce pixels of correct range.
                         save_image("results/epoch#" + str(e) + "-batch#" + str(batch_id) + "-iter#" + str(cs_iter) + ".jpg",
-                                   numpy.clip(img, a_min=-1, a_max=1))
+                                   np.clip(img, a_min=-1, a_max=1))
 
 
     # def load_images(self, path, pattern):
