@@ -24,7 +24,7 @@ TODO's and Known Issues
 This model is originally proposed for [an image classification contest held by Baidu](http://js.baidu.com/), but sadly I hadn't had time to finish it by the time it was due. I'm still working on it and the list will be updated accordingly.
 
 1. The model requires powerful hardware to train. I'm using the CPU version of Tensorflow and my computer has i5-4210M CPU, 12G RAM and 12G SSD swap. It nearly eats up the whole swap during training and takes forever to finish, let alone my poor 2GB GPU which exploded at the first batch and forced me to give up the thought to use the GPU version.
-2. Currently the VAE part and the classification part can't be trained separately, making it hard to use unlabeled data.
+2. test()
 3. I'm using the sequence of encoder states as classifier input. Might as well use latent code sequence?
 4. Validation + early stopping.
 5. Variable attention window aspect ratio?

@@ -34,6 +34,7 @@ class Draw():
         self.n_z = 50       # latent code length
         self.num_class = 134        # number of label classes
         self.sequence_length = 3 if self.DEBUG else 12
+        self.num_epochs = 10
         self.batch_size = 2 if self.DEBUG else 8
         self.portion_as_training_data = 4/5
         self.share_parameters = False
@@ -141,13 +142,13 @@ class Draw():
             logsigma = self.logsigma[t]
             kl_terms[t] = 0.5 * tf.reduce_sum(mu2 + sigma2 - 2*logsigma, 1) - self.sequence_length*0.5
         self.latent_loss = tf.reduce_mean(tf.add_n(kl_terms))
+        self.vae_cost = self.generation_loss + self.latent_loss
 
         # classification
         # take encoder state sequence of every image
         batch_encoder_states = tf.stack([s.c for s in enc_state_history[1:]])
         batch_encoder_states = tf.transpose(batch_encoder_states, perm=[1, 0, 2])
         batch_encoder_states = tf.reshape(batch_encoder_states, [-1, self.sequence_length * self.n_hidden])
-        # print(len(enc_state_history[0]))
 
         # tensor[batch_len, self.num_class]
         logits = dense(batch_encoder_states, self.sequence_length * self.n_hidden, self.num_class, "pre_softmax")
@@ -163,15 +164,21 @@ class Draw():
                                                                               name="softmax_xentropy")
         self.classification_loss = tf.reduce_sum(cross_entropy_losses)
 
-        self.cost = self.generation_loss + self.latent_loss + self.classification_loss
+        self.total_cost = self.vae_cost + self.classification_loss
         print("I'm computing gradients!")
-        grads = self.optimizer.compute_gradients(self.cost)
+        vae_grads = self.optimizer.compute_gradients(self.vae_cost)
+        total_grads = self.optimizer.compute_gradients(self.total_cost)
 
         # clip gradients
-        for i, (g, v) in enumerate(grads):
+        for i, (g, v) in enumerate(vae_grads):
             if g is not None:
-                grads[i] = (tf.clip_by_norm(g, 5), v)
-        self.train_op = self.optimizer.apply_gradients(grads)
+                vae_grads[i] = (tf.clip_by_norm(g, 5), v)
+
+        for i, (g, v) in enumerate(total_grads):
+            if g is not None:
+                total_grads[i] = (tf.clip_by_norm(g, 5), v)
+        self.train_op_vae = self.optimizer.apply_gradients(vae_grads)
+        self.train_op_total = self.optimizer.apply_gradients(total_grads)
 
         # update graph
         self.train_writer.add_graph(self.sess.graph)
@@ -335,9 +342,9 @@ class Draw():
         return wr * 1.0/gamma
 
 
-    def get_training_data(self):
+    def get_labeled_training_data(self):
         data = []
-        image_label_path = "./data/labels/image_labels_debug.txt" if self.DEBUG else "./data/labels/image_labels.txt"
+        image_label_path = "./data/labels/images_labeled_debug.txt" if self.DEBUG else "./data/labels/images_labeled.txt"
         with open(image_label_path, "r") as file:
             for line in file:
                 image_label_pattern = re.compile(r'(\S+) (\d+) \S+')
@@ -358,7 +365,18 @@ class Draw():
         return [data[i] for i in training_data_index]       # [(filename, label_num)]
 
 
-    def generate_batches(self, data):
+    def get_unlabeled_training_data(self):
+        data = []
+        image_label_path = "./data/labels/images_unlabeled_debug.txt" if self.DEBUG else "./data/labels/images_unlabeled.txt"
+        with open(image_label_path, "r") as file:
+            for line in file:
+                image_label_pattern = re.compile(r'(\S+) \S+')
+                m = image_label_pattern.match(line)
+                data.append((m.group(1),))       # (filename)
+        return data       # [(filename)]
+
+
+    def generate_batches(self, data, labeled):
         data_len = len(data)
         num_batches = data_len // self.batch_size + (1 if data_len % self.batch_size != 0 else 0)
         batches = []
@@ -366,10 +384,13 @@ class Draw():
         for batch_id in range(num_batches):
             batch_upper_bound = (batch_id + 1) * self.batch_size if batch_id != data_len / self.batch_size + 1 else data_len
             batch_files = data[batch_id * self.batch_size: batch_upper_bound]
-            labels = [batch_file[1] for batch_file in batch_files]
-            batches.append((batch_id, batch_files, labels))
+            if labeled:
+                labels = [batch_file[1] for batch_file in batch_files]
+                batches.append((batch_id, batch_files, labels))
+            else:
+                batches.append((batch_id, batch_files))
 
-        return batches     # [(batch_id, array of (filename, label_num), labels)]
+        return batches     # [(batch_id, array of (filename, label_num(if labeled)), labels(if labeled))]
 
     def generate_batch_tensor(self, batch_files):
         batch = np.asarray([get_image(os.path.join("./data/train", batch_file[0] + ".jpg"))
@@ -393,8 +414,11 @@ class Draw():
         return out
 
 
-    def train(self):
-        data = self.get_training_data()
+    # TODO: resume training?
+
+
+    def train_supervised(self):
+        data = self.get_labeled_training_data()
         # base: first 64 images of the training set
         # base = np.array([get_image(sample_file) for sample_file in data[0:64]])
         # base += 1
@@ -404,28 +428,20 @@ class Draw():
         # merge_color() doesn't work on variable size image dataset
         # save_image("results/base.jpg", merge_color(base, [8, 8]))     # 0 <= each pixel <= 1?
 
-        batches = self.generate_batches(data)
-
-        # print(data_len // self.batch_size)
-
+        batches = self.generate_batches(data, labeled=True)
         saver = tf.train.Saver(max_to_keep=5)
 
-
         # TODO: tensorboard functions
-        for e in range(10):
+        for e in range(self.num_epochs):
             print("epoch: %i" % e)
             # epoch
             # why skipping 2 batches?
             # for i in range((len(data) / self.batch_size) - 2):
             for batch_id, batch_images, batch_labels in batches:
                 print("\tbatch id: %i" % batch_id)
-                # print(self.sess.run(batch[0][0]))
-                # batch = tf.stack(batch)        # [batch, height, width, channels]
-
                 # batch_images = np.array(batch).astype(np.float32)
                 # batch_images += 1
                 # batch_images /= 2
-                # self.images = batch_images      # no need to feed anymore
 
                 # cs, attn_params, gen_loss, lat_loss, _ = self.sess.run([
                 #     self.canvas, self.attn_params, self.generation_loss, self.latent_loss,
@@ -441,7 +457,7 @@ class Draw():
 
                 cs, gen_loss, lat_loss, cls_loss, acc, _ = self.sess.run([
                     self.canvas, self.generation_loss, self.latent_loss,
-                    self.classification_loss, self.classification_accuracy, self.train_op
+                    self.classification_loss, self.classification_accuracy, self.train_op_total
                 ], feed_dict={self.images: batch_images, self.labels: batch_labels})
                 print("\tepoch %d batch %d: gen_loss %f, lat_loss %f, classification_loss %f, acc %f"
                       % (e, batch_id, gen_loss, lat_loss, cls_loss, acc))
@@ -452,20 +468,57 @@ class Draw():
                 num_demo_image = self.batch_size if self.DEBUG else 10
 
                 if batch_id % ckpt_step_len == 0:
-
                     saver.save(self.sess, "./model/model", global_step=e*10000 + batch_id)
-
                     # cs = 1.0/(1.0+np.exp(-np.array(cs)))    # x_recons=sigmoid(canvas)
 
                     for cs_iter in range(num_demo_image):       # print first 10 images in canvas
                         img = cs[cs_iter][-1]
                         # TODO: currently image tensor is clipped to range of [-1, 1], but there could be better ways
                         # to make the network produce pixels of correct range.
-                        save_image("results/epoch#" + str(e) + "-batch#" + str(batch_id) + "-iter#" + str(cs_iter) + ".jpg",
+                        save_image("results/supervised/epoch#" + str(e) + "-batch#" + str(batch_id) + "-iter#" + str(cs_iter) + ".jpg",
                                    np.clip(img, a_min=-1, a_max=1))
 
 
-    # TODO: resume training?
+    def train_unsupervised(self):
+        data = self.get_unlabeled_training_data()
+        batches = self.generate_batches(data, labeled=False)
+        saver = tf.train.Saver(max_to_keep=5)
+
+        # TODO: tensorboard functions
+        for e in range(self.num_epochs):
+            print("unsupervised epoch: %i" % e)
+            # epoch
+            for batch_id, batch_images in batches:
+                print("\tbatch id: %i" % batch_id)
+                # batch_images = np.array(batch).astype(np.float32)
+                # batch_images += 1
+                # batch_images /= 2
+
+                print("\tI'm running!")
+                batch_images = self.generate_batch_tensor(batch_images)
+                cs, gen_loss, lat_loss, _ = self.sess.run([
+                    self.canvas, self.generation_loss, self.latent_loss, self.train_op_vae
+                ], feed_dict={self.images: batch_images})
+                print("\tepoch %d batch %d: gen_loss %f, lat_loss %f" % (e, batch_id, gen_loss, lat_loss))
+                del batch_images        # free memory
+                print("\tdeleted batch image tensor.")
+
+                ckpt_step_len = 2 if self.DEBUG else 800
+                num_demo_image = self.batch_size if self.DEBUG else 10
+
+                if batch_id % ckpt_step_len == 0:
+                    saver.save(self.sess, "./model/model", global_step=e*10000 + batch_id)
+                    # cs = 1.0/(1.0+np.exp(-np.array(cs)))    # x_recons=sigmoid(canvas)
+
+                    for cs_iter in range(num_demo_image):       # print first 10 images in canvas
+                        img = cs[cs_iter][-1]
+                        # TODO: currently image tensor is clipped to range of [-1, 1], but there could be better ways
+                        # to make the network produce pixels of correct range.
+                        save_image("results/unsupervised/epoch#" + str(e) + "-batch#" + str(batch_id) + "-iter#" + str(cs_iter) + ".jpg",
+                                   np.clip(img, a_min=-1, a_max=1))
+
+    # TODO: test()
+
 
     def view(self):
         data = glob(os.path.join("./data/train", "*.jpg"))          # TODO: what is that?
@@ -528,7 +581,7 @@ class Draw():
 
 
 model = Draw()
-model.train()
+model.train_supervised()
 # model.view()
 
 # test padding
