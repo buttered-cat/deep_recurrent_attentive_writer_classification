@@ -33,7 +33,7 @@ class Draw():
         self.n_z = 50       # latent code length
         self.num_class = 134        # number of label classes
         self.sequence_length = 3 if self.DEBUG else 12
-        self.batch_size = 2 if self.DEBUG else 4
+        self.batch_size = 2 if self.DEBUG else 64
         self.portion_as_training_data = 4/5
         self.share_parameters = False
 
@@ -438,7 +438,6 @@ class Draw():
 
 
         # TODO: tensorboard functions
-        print("graph construction:")
         for e in range(10):
             print("epoch: %i" % e)
             # epoch
@@ -467,6 +466,7 @@ class Draw():
                 print("\tepoch %d batch %d: gen_loss %f, lat_loss %f, classification_loss %f, acc %f"
                       % (e, batch_id, gen_loss, lat_loss, cls_loss, acc))
                 del batch_images        # free memory
+                print("\tdeleted batch image tensor.")
 
                 ckpt_step_len = 2 if self.DEBUG else 800
                 num_demo_image = self.batch_size if self.DEBUG else 10
