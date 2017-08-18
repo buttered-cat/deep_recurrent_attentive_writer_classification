@@ -24,7 +24,7 @@ import subprocess
 # TODO: need a memory mechanism
 class Draw():
     def __init__(self):
-        self.DEBUG = True
+        self.DEBUG = False
 
         self.img_size = 64
         self.num_channels = 3
@@ -66,6 +66,10 @@ class Draw():
 
         self.train_writer = tf.summary.FileWriter('./log/train_log')
         self.test_writer = tf.summary.FileWriter('./log/train_log')
+
+        self.labeled_train_file_list_pattern = r'(\S+) (\d+) \S+'
+        self.unlabeled_train_file_list_pattern = r'(\S+) \S+'
+        self.test_file_list_pattern = r'(\S+) (\d+)'
 
         print("GPU state before creating session:")
         print(subprocess.check_output([NVIDIA_SMI_PATH]).decode('utf-8'))
@@ -154,8 +158,8 @@ class Draw():
         logits = dense(batch_encoder_states, self.sequence_length * self.n_hidden, self.num_class, "pre_softmax")
         labels = self.labels
 
-        prediction_correctness = tf.equal(tf.argmax(logits, axis=1), labels)
-        self.classification_accuracy = tf.reduce_mean(tf.cast(prediction_correctness, tf.float32))
+        self.classification_correctness = tf.equal(tf.argmax(logits, axis=1), labels)
+        self.classification_accuracy = tf.reduce_mean(tf.cast(self.classification_correctness, tf.float32))
 
         # tensor[batch_len, self.num_class]
         # labels = tf.one_hot(indices=batch[1], depth=self.num_class, on_value=1.0, off_value=0.0, axis=-1)
@@ -341,14 +345,18 @@ class Draw():
 
         return wr * 1.0/gamma
 
+    def parse_image_file_list_line(self, line, pattern, ):
+        line_pattern = re.compile(pattern)
+        m = line_pattern.match(line)
+        return m
+
 
     def get_labeled_training_data(self):
         data = []
         image_label_path = "./data/labels/images_labeled_debug.txt" if self.DEBUG else "./data/labels/images_labeled.txt"
         with open(image_label_path, "r") as file:
             for line in file:
-                image_label_pattern = re.compile(r'(\S+) (\d+) \S+')
-                m = image_label_pattern.match(line)
+                m = self.parse_image_file_list_line(line, self.labeled_train_file_list_pattern)
                 data.append((m.group(1), int(m.group(2))))       # (filename, label_num)
 
         data_len = len(data)
@@ -370,11 +378,19 @@ class Draw():
         image_label_path = "./data/labels/images_unlabeled_debug.txt" if self.DEBUG else "./data/labels/images_unlabeled.txt"
         with open(image_label_path, "r") as file:
             for line in file:
-                image_label_pattern = re.compile(r'(\S+) \S+')
-                m = image_label_pattern.match(line)
+                m = self.parse_image_file_list_line(line, self.unlabeled_train_file_list_pattern)
                 data.append((m.group(1),))       # (filename)
         return data       # [(filename)]
 
+
+    def get_test_data(self):
+        data = []
+        image_label_path = "./data/test/test_file_list"
+        with open(image_label_path, "r") as file:
+            for line in file:
+                m = self.parse_image_file_list_line(line, self.test_file_list_pattern)
+                data.append((m.group(1), int(m.group(2))))       # (filename, label_num)
+        return data
 
     def generate_batches(self, data, labeled):
         data_len = len(data)
@@ -391,6 +407,7 @@ class Draw():
                 batches.append((batch_id, batch_files))
 
         return batches     # [(batch_id, array of (filename, label_num(if labeled)), labels(if labeled))]
+
 
     def generate_batch_tensor(self, batch_files):
         batch = np.asarray([get_image(os.path.join("./data/train", batch_file[0] + ".jpg"))
@@ -414,10 +431,10 @@ class Draw():
         return out
 
 
-    # TODO: resume training?
+    # TODO: maybe generative part?
 
 
-    def train_supervised(self):
+    def train_supervised(self, resume_training, model_path=None):
         data = self.get_labeled_training_data()
         # base: first 64 images of the training set
         # base = np.array([get_image(sample_file) for sample_file in data[0:64]])
@@ -429,7 +446,10 @@ class Draw():
         # save_image("results/base.jpg", merge_color(base, [8, 8]))     # 0 <= each pixel <= 1?
 
         batches = self.generate_batches(data, labeled=True)
-        saver = tf.train.Saver(max_to_keep=5)
+        saver = tf.train.Saver(max_to_keep=2)
+
+        if resume_training:
+            saver.restore(self.sess, model_path)
 
         # TODO: tensorboard functions
         for e in range(self.num_epochs):
@@ -479,10 +499,13 @@ class Draw():
                                    np.clip(img, a_min=-1, a_max=1))
 
 
-    def train_unsupervised(self):
+    def train_unsupervised(self, resume_training, model_path=None):
         data = self.get_unlabeled_training_data()
         batches = self.generate_batches(data, labeled=False)
-        saver = tf.train.Saver(max_to_keep=5)
+        saver = tf.train.Saver(max_to_keep=2)
+
+        if resume_training:
+            saver.restore(self.sess, model_path)
 
         # TODO: tensorboard functions
         for e in range(self.num_epochs):
@@ -517,7 +540,36 @@ class Draw():
                         save_image("results/unsupervised/epoch#" + str(e) + "-batch#" + str(batch_id) + "-iter#" + str(cs_iter) + ".jpg",
                                    np.clip(img, a_min=-1, a_max=1))
 
-    # TODO: test()
+    def test_classifier(self, model_path):
+        data = self.get_test_data()
+        batches = self.generate_batches(data, labeled=True)
+        saver = tf.train.Saver(max_to_keep=2)
+        saver.restore(self.sess, model_path)     # correct name?
+
+        acc_list = []
+        cls_loss_list = []
+        print("Test:")
+        for batch_id, batch_images, batch_labels in batches:
+            print("\tbatch id: %i" % batch_id)
+            print("\tI'm running!")
+
+            batch_images = self.generate_batch_tensor(batch_images)
+            cls_loss, acc = self.sess.run([
+                self.classification_loss, self.classification_accuracy
+            ], feed_dict={self.images: batch_images, self.labels: batch_labels})
+
+            acc_list.append(acc)
+            cls_loss_list.append(cls_loss)
+
+            print("\tbatch %d: cls_loss %f, acc %f" % (batch_id, cls_loss, acc))
+            del batch_images  # free memory
+            print("\tdeleted batch image tensor.")
+
+        print("Average classification loss: %f" % (sum(cls_loss_list) / len(cls_loss_list)))
+        print("Average accuracy: %f" % (sum(acc_list) / len(acc_list)))
+
+
+    # TODO: infer()
 
 
     def view(self):
@@ -581,8 +633,9 @@ class Draw():
 
 
 model = Draw()
-model.train_supervised()
+# model.train_supervised(resume_training=False)
 # model.view()
+model.test_classifier("./model/model-90002")
 
 # test padding
 # data = model.get_training_data()
