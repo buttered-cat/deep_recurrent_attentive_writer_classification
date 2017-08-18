@@ -28,5 +28,4 @@ This model is originally proposed for [an image classification contest held by B
 3. I'm using the sequence of encoder states as classifier input. Might as well use latent code sequence?
 4. Validation + early stopping.
 5. Variable attention window aspect ratio?
-6. Resume training.
-7. Tensorboard functions.
+6. Tensorboard functions.
