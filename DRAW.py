@@ -24,7 +24,7 @@ import subprocess
 # TODO: need a memory mechanism
 class Draw():
     def __init__(self):
-        self.DEBUG = False
+        self.DEBUG = True
 
         self.img_size = 64
         self.num_channels = 3
@@ -59,8 +59,6 @@ class Draw():
         # mu, logsigma, sigma: [(less or equal than) batch_size, self.sequence_length]
         self.mu, self.logsigma, self.sigma = [0] * self.sequence_length, [0] * self.sequence_length, [0] * self.sequence_length
 
-        # x = tf.reshape(self.images, [-1, self.img_size*self.img_size*self.num_colors])
-        # x = self.images     # [batch, height, width, channel]
         self.attn_params = []
         # self.generated_images = []
         self.generation_loss = []
@@ -82,7 +80,7 @@ class Draw():
         batch_shape = tf.shape(x)
 
         # have to use the whole tuple because of state_is_tuple limitation
-        # [sequence_len, tensor[batch_len, self.n_hidden]]
+        # [sequence_len + 1, tensor[batch_len, self.n_hidden]]
         # VICIOUS TRAP!!! the first form copies the same list object many times!
         # see https://stackoverflow.com/questions/5280799/list-append-changing-all-elements-to-the-appended-item
         # enc_state_history = [[self.lstm_enc.zero_state(1, tf.float32)]] * len(x)
@@ -90,13 +88,6 @@ class Draw():
         dec_state_history = [0] * (self.sequence_length + 1)
         enc_state_history[0] = self.lstm_enc.zero_state(batch_shape[0], tf.float32)
         dec_state_history[0] = self.lstm_enc.zero_state(batch_shape[0], tf.float32)
-
-        # h_dec_prev: decoder state of previous time step, list of tensors
-        # initialize previous decoder state
-        # h_dec_prev = [tf.zeros((self.n_hidden))] * len(x)
-
-        # c_prev: list with shape [batch_size], each element is a tensor of an image canvas
-        c_prev = []
 
         # computation graph construction
         print("I'm constructing graph!")
@@ -114,39 +105,23 @@ class Draw():
             r = self.read_attention(x, x_hat, dec_state_history[t].c)  # use cell state
             # encode it to gauss distrib
             # use cell state
-            self.mu[t], self.logsigma[t], self.sigma[t], enc_state_history[t+1] = self.encode(enc_state_history[t],
-                                                                               tf.concat([r, dec_state_history[t].c], 1))
+            self.mu[t], self.logsigma[t], self.sigma[t], enc_state_history[t+1] = self.encode(
+                enc_state_history[t], tf.concat([r, dec_state_history[t].c], 1)
+            )
 
             # sample from the distrib to get z
             # TODO: further research, dont' quite understand
-            # print(t, i)
-            # print(self.mu[t][i])
-            # print(self.sigma[t][i])
             z = self.sampleQ(self.mu[t], self.sigma[t])  # [self.n_z]: latent variable
             # retrieve the hidden layer of RNN
             new_dec_state_tuple = self.decode_layer(dec_state_history[t], z)
             # h_dec, new_dec_state_tuple = self.decode_layer(dec_state_history[i], z[i])
             dec_state_history[t+1] = new_dec_state_tuple
             # map from hidden layer -> image portion, and then write it.
-            # self.cs[t] = c_prev + self.write_basic(h_dec)
-
             # TODO: write window will be extrapolated to canvas size, but ain't it supposed to write a small patch?
             self.canvas[t] = c_prev + self.write_attention(new_dec_state_tuple.c, batch_shape)
             self.share_parameters = True # from now on, share variables
 
-
-        canvas_list = []
-        generation_loss_list = []
-        kl_terms_list = []
-
         # checkout https://stackoverflow.com/questions/35330117/how-can-i-run-a-loop-with-a-tensor-as-its-range-in-tensorflow
-        # canvas_list, generation_loss_list = tf.while_loop(while_cond, while_body, loop_vars=[canvas_list, generation_loss_list])
-        # tf.while_loop(while_cond, while_body, loop_vars=[i0, canvas_list, generation_loss_list])
-
-        # for i in range(tf.shape(self.canvas)[0]):
-        #     canvas_list.append(self.canvas[i][-1])     # final canvas per image
-        #     generation_loss_list.append(tf.nn.l2_loss(self.images[i] - self.canvas[i][-1]))    # error image per image
-
         # the final timestep
         # TODO: why sigmoid? Pixel range
         # canvas shape: [batch, height, width, channel]
@@ -184,7 +159,6 @@ class Draw():
         # tensor[batch_len, self.num_class]
         # labels = tf.one_hot(indices=batch[1], depth=self.num_class, on_value=1.0, off_value=0.0, axis=-1)
 
-        # cross_entropy_losses = tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels, dim=-1, name=)
         cross_entropy_losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels,
                                                                               name="softmax_xentropy")
         self.classification_loss = tf.reduce_sum(cross_entropy_losses)
@@ -285,19 +259,16 @@ class Draw():
             # TODO: variable aspect ratio glimpse?
             # [batch_len, num_channels, attention_n, attention_n]
             glimpse = tf.matmul(Fy, tf.matmul(img_t, Fxt))   # tensor mul
-            # glimpse = tf.reshape(glimpse, [self.num_channels, self.batch_size, self.attention_n, self.attention_n])
             glimpse = tf.transpose(glimpse, [0, 2, 3, 1])      # [batch_len, attention_n, attention_n, num_channels]
             # reshape: iterate through two tensors simultaneously, and fill the elements
-            # glimpse = tf.reshape(glimpse, [self.batch_size, self.attention_n * self.attention_n * self.num_channels])
             # [batch_len, attention_n * attention_n * channels]
             glimpse = tf.reshape(glimpse, [-1, self.attention_n * self.attention_n * self.num_channels])
-            # print(self.sess.run(tf.shape(glimpse)))
             # finally scale this glimpse with the gamma parameter
             return glimpse * gamma  # [batch_len, attention_n * attention_n * channels]
+
         x = filter_img(x, Fx, Fy, gamma)            # [1, self.attention_n * self.attention_n * channels]
         x_hat = filter_img(x_hat, Fx, Fy, gamma)
-        # print(self.sess.run(tf.shape(x)))
-        # print(self.sess.run(tf.shape(x_hat)))
+
         return tf.concat([x, x_hat], 1)        # [batch_len, 2 * attention_n * attention_n * channels]
 
     # encode an attention patch
@@ -307,8 +278,6 @@ class Draw():
             # see https://www.quora.com/What-is-the-meaning-of-%E2%80%9CThe-number-of-units-in-the-LSTM-cell
             # and https://stackoverflow.com/questions/36732877/about-lstm-cell-state-size
             # feeds a fixed size attention window
-            # print(self.sess.run(tf.shape(image)))
-            # print(self.sess.run(tf.shape(prev_state)))
             _, new_state_tuple = self.lstm_enc(image, prev_state)     # tuple of [1(batch), self.n_hidden]
             # hidden_layer, next_state = self.lstm_enc(image, prev_state)     # each: self.n_hidden?
 
@@ -359,14 +328,10 @@ class Draw():
         Fx = tf.expand_dims(Fx, 1)  # [batch_len, 1, attention_n, width]
         Fx = tf.concat([Fx] * self.num_channels, axis=1)    # [batch_len, 3, attention_n, width]
 
-
         wr = tf.matmul(Fyt, tf.matmul(w_t, Fx))       # [batch_len, self.num_channels, batch_shape[1], batch_shape[2]]
-
-        # sep_colors = tf.reshape(wr, [self.batch_size, self.num_channels, self.img_size ** 2])
-        # wr = tf.reshape(wr, [self.num_channels, self.batch_size, self.img_size, self.img_size])
         wr = tf.transpose(wr, [0, 2, 3, 1])
-        # wr = tf.reshape(wr, [img_size[0] * img_size[1] * self.num_channels])    # [img_size[0] * img_size[1] * self.num_channels]
         gamma = tf.reshape(gamma, [-1, 1, 1, 1])
+
         return wr * 1.0/gamma
 
 
@@ -494,20 +459,10 @@ class Draw():
 
                     for cs_iter in range(num_demo_image):       # print first 10 images in canvas
                         img = cs[cs_iter][-1]
-                        # print(type(img))
-                        # results_square = np.reshape(results, [-1, self.img_size, self.img_size, self.num_channels])
-                        # print(results_square.shape)
                         # TODO: currently image tensor is clipped to range of [-1, 1], but there could be better ways
-                        # to let the network produce pixels of correct range.
+                        # to make the network produce pixels of correct range.
                         save_image("results/epoch#" + str(e) + "-batch#" + str(batch_id) + "-iter#" + str(cs_iter) + ".jpg",
                                    np.clip(img, a_min=-1, a_max=1))
-
-
-    # def load_images(self, path, pattern):
-    #     data = glob(os.path.join(path, pattern))
-    #     images = [get_image(file) for file in data]  # [batch, height, width, channels]
-    #     images = np.array(images).astype(np.float32)
-    #     self.images = images  # no need to feed anymore
 
 
     # TODO: resume training?
@@ -575,6 +530,8 @@ class Draw():
 model = Draw()
 model.train()
 # model.view()
+
+# test padding
 # data = model.get_training_data()
 # batches = model.generate_batches(data)
 # save_image("data/padded_images/1.jpg", batches[0][1][0, :, :, :])
