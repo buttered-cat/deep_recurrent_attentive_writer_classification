@@ -468,6 +468,12 @@ class Draw():
                 # ])
                 print("\tI'm running!")
                 batch_images = self.generate_batch_tensor(batch_images)
+                # cs, acc, _ = self.sess.run([
+                #     self.canvas, self.classification_accuracy, self.train_op
+                # ], feed_dict={self.images: batch_images, self.labels: batch_labels})
+                # print("\tepoch %d batch %d: acc %f"
+                #       % (e, batch_id, acc))
+
                 cs, gen_loss, lat_loss, cls_loss, acc, _ = self.sess.run([
                     self.canvas, self.generation_loss, self.latent_loss,
                     self.classification_loss, self.classification_accuracy, self.train_op
