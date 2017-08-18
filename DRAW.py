@@ -33,7 +33,7 @@ class Draw():
         self.n_z = 50       # latent code length
         self.num_class = 134        # number of label classes
         self.sequence_length = 3 if self.DEBUG else 12
-        self.batch_size = 2 if self.DEBUG else 8
+        self.batch_size = 2 if self.DEBUG else 4
         self.portion_as_training_data = 4/5
         self.share_parameters = False
 
@@ -387,34 +387,37 @@ class Draw():
     def generate_batches(self, data):
         data_len = len(data)
         num_batches = data_len // self.batch_size + (1 if data_len % self.batch_size != 0 else 0)
-        batches_with_padding = []
+        batches = []
 
         for batch_id in range(num_batches):
             batch_upper_bound = (batch_id + 1) * self.batch_size if batch_id != data_len / self.batch_size + 1 else data_len
             batch_files = data[batch_id * self.batch_size: batch_upper_bound]
-            batch = np.asarray([get_image(os.path.join("./data/train", batch_file[0] + ".jpg"))
-                     for batch_file in batch_files])
             labels = [batch_file[1] for batch_file in batch_files]
+            batches.append((batch_id, batch_files, labels))
 
-            # https://stackoverflow.com/questions/32037893/numpy-fix-array-with-rows-of-different-lengths-by-filling-the-empty-elements-wi
-            # batch_len * height
-            widths = np.array([len(img[0]) for img in batch])
-            heights = np.array([len(img[:, 0]) for img in batch])
+        return batches     # [(batch_id, array of (filename, label_num), labels)]
 
-            width_mask = np.arange(widths.max()) < widths[:, None]      # batch_len * max_width
-            height_mask = np.arange(heights.max()) < heights[:, None]      # batch_len * max_height
+    def generate_batch_tensor(self, batch_files):
+        batch = np.asarray([get_image(os.path.join("./data/train", batch_file[0] + ".jpg"))
+                            for batch_file in batch_files])
 
-            width_mask = np.expand_dims(width_mask, axis=1)     # batch_len * 1 * max_width
-            height_mask = height_mask[:, :, None]       # batch_len * max_height * 1
-            mask = np.logical_and(width_mask, height_mask)      # batch_len * max_height * max_width
-            mask = numpy.stack([mask] * self.num_channels, axis=3)      # batch_len * max_height * max_width * 3(channels)
+        # https://stackoverflow.com/questions/32037893/numpy-fix-array-with-rows-of-different-lengths-by-filling-the-empty-elements-wi
+        # batch_len * height
+        widths = np.array([len(img[0]) for img in batch])
+        heights = np.array([len(img[:, 0]) for img in batch])
 
-            out = np.zeros(mask.shape, dtype=np.float32)
-            out[mask] = np.concatenate([np.reshape(image, (-1)) for image in batch])
+        width_mask = np.arange(widths.max()) < widths[:, None]  # batch_len * max_width
+        height_mask = np.arange(heights.max()) < heights[:, None]  # batch_len * max_height
 
-            batches_with_padding.append((batch_id, out, labels))
+        width_mask = np.expand_dims(width_mask, axis=1)  # batch_len * 1 * max_width
+        height_mask = height_mask[:, :, None]  # batch_len * max_height * 1
+        mask = np.logical_and(width_mask, height_mask)  # batch_len * max_height * max_width
+        mask = numpy.stack([mask] * self.num_channels, axis=3)  # batch_len * max_height * max_width * 3(channels)
 
-        return batches_with_padding     # [(batch_id, np array of images, labels)]
+        out = np.zeros(mask.shape, dtype=np.float32)
+        out[mask] = np.concatenate([np.reshape(image, (-1)) for image in batch])
+        return out
+
 
     def train(self):
         data = self.get_training_data()
@@ -428,7 +431,6 @@ class Draw():
         # save_image("results/base.jpg", merge_color(base, [8, 8]))     # 0 <= each pixel <= 1?
 
         batches = self.generate_batches(data)
-
 
         # print(data_len // self.batch_size)
 
@@ -457,15 +459,15 @@ class Draw():
                 #     classification_loss, classification_accuracy, self.train_op
                 # ])
                 print("\tI'm running!")
+                batch_images = self.generate_batch_tensor(batch_images)
                 cs, gen_loss, lat_loss, cls_loss, acc, _ = self.sess.run([
                     self.canvas, self.generation_loss, self.latent_loss,
                     self.classification_loss, self.classification_accuracy, self.train_op
                 ], feed_dict={self.images: batch_images, self.labels: batch_labels})
                 print("\tepoch %d batch %d: gen_loss %f, lat_loss %f, classification_loss %f, acc %f"
                       % (e, batch_id, gen_loss, lat_loss, cls_loss, acc))
-                # print(attn_params[0].shape)
-                # print(attn_params[1].shape)
-                # print(attn_params[2].shape)
+                del batch_images        # free memory
+
                 ckpt_step_len = 2 if self.DEBUG else 800
                 num_demo_image = self.batch_size if self.DEBUG else 10
 

@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/DogImageClassification.iml" filepath="$PROJECT_DIR$/.idea/DogImageClassification.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/deep_recurrent_attentive_writer_classifier.iml" filepath="$PROJECT_DIR$/.idea/deep_recurrent_attentive_writer_classifier.iml" />
     </modules>
   </component>
 </project>
